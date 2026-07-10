@@ -109,6 +109,27 @@ if (reset.ok) {
             .join(', '),
       );
     else record('RLS coverage', true, `${rows.length} table(s), all RLS + ≥1 non-permissive policy`);
+
+    // No public SECURITY DEFINER function may be API-callable by anon/authenticated:
+    // PostgREST exposes public functions as RPC, so a SECURITY DEFINER one is a
+    // privilege-escalation surface (this is a get_advisors security finding — we
+    // catch it locally, in-loop, too).
+    const { rows: definer } = await client.query(`
+      select p.proname
+      from pg_proc p
+      join pg_namespace n on n.oid = p.pronamespace
+      where n.nspname = 'public' and p.prosecdef = true
+        and (has_function_privilege('anon', p.oid, 'EXECUTE')
+             or has_function_privilege('authenticated', p.oid, 'EXECUTE'));`);
+    if (definer.length)
+      record(
+        'definer fn exposure',
+        false,
+        'public SECURITY DEFINER function(s) API-callable: ' +
+          definer.map((d) => d.proname).join(', ') +
+          ' — revoke execute from anon, authenticated',
+      );
+    else record('definer fn exposure', true, 'no exposed SECURITY DEFINER functions');
   } catch (e) {
     record('RLS coverage', false, `DB query failed: ${e.message}`);
   } finally {

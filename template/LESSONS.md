@@ -16,3 +16,14 @@ template itself — so the next app is born without the bug.
 ## Testing
 - **`@testing-library/react-native` v14 `renderHook` is async** — `await` it, or
   destructuring `{ result }` yields `undefined` (tsc catches this).
+
+## Supabase
+- **A `SECURITY DEFINER` function in the `public` schema is exposed as a PostgREST
+  RPC** and get_advisors flags it (anon/authenticated can call it — a privilege-
+  escalation surface). Trigger functions don't need EXECUTE granted to callers (the
+  trigger runs as owner), so end the migration with
+  `revoke execute on function public.<fn>() from public, anon, authenticated;`.
+  verify.mjs now checks this locally ("definer fn exposure").
+- **Email OTP needs `{{ .Token }}` in the Magic Link email template** (dashboard →
+  Authentication → Email Templates), or the email sends a magic link instead of the
+  6-digit code the app's verify-otp screen expects.

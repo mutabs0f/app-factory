@@ -62,3 +62,9 @@ $$;
 create trigger profiles_set_updated_at
   before update on public.profiles
   for each row execute function public.set_updated_at();
+
+-- Trigger functions run inside the trigger with the owner's privileges, never via
+-- the API. Revoke EXECUTE so they are not exposed as PostgREST RPC endpoints —
+-- get_advisors flags a public SECURITY DEFINER function callable by anon/authenticated.
+revoke execute on function public.handle_new_user() from public, anon, authenticated;
+revoke execute on function public.set_updated_at() from public, anon, authenticated;
