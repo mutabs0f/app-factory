@@ -20,11 +20,19 @@ export function SessionProvider({ children }: PropsWithChildren) {
   useEffect(() => {
     let mounted = true;
 
-    supabase.auth.getSession().then(({ data }) => {
-      if (!mounted) return;
-      setSession(data.session);
-      setIsLoading(false);
-    });
+    supabase.auth
+      .getSession()
+      .then(({ data }) => {
+        if (mounted) setSession(data.session);
+      })
+      .catch(() => {
+        // A corrupted/unreadable stored session (e.g. Keychain error) must not
+        // strand the app on the loading spinner — treat it as signed out.
+        if (mounted) setSession(null);
+      })
+      .finally(() => {
+        if (mounted) setIsLoading(false);
+      });
 
     const { data: sub } = supabase.auth.onAuthStateChange((_event, next) => {
       setSession(next);

@@ -9,7 +9,7 @@
 // legacy service_role JWT is caught precisely by decoding the token's payload
 // (which distinguishes it from the harmless anon/publishable key).
 import { execSync } from 'node:child_process';
-import { readFileSync, readdirSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { extname, join, relative } from 'node:path';
 
 const ROOT = process.cwd();
@@ -22,6 +22,10 @@ const PATTERNS = [
   { name: 'Stripe secret key', re: /\b(sk|rk)_(live|test)_[A-Za-z0-9]{16,}/ },
   { name: 'AWS access key id', re: /\bAKIA[0-9A-Z]{16}\b/ },
   { name: 'Private key block', re: /-----BEGIN (?:[A-Z]+ )?PRIVATE KEY-----/ },
+  { name: 'GitHub token', re: /\b(?:ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9]{36}\b/ },
+  { name: 'GitHub fine-grained PAT', re: /\bgithub_pat_[A-Za-z0-9_]{60,}\b/ },
+  { name: 'Google API key', re: /\bAIza[A-Za-z0-9_-]{35}\b/ },
+  { name: 'Slack token', re: /\bxox[baprs]-[A-Za-z0-9-]{10,}\b/ },
 ];
 
 const JWT_RE = /eyJ[A-Za-z0-9_-]{6,}\.([A-Za-z0-9_-]{6,})\.[A-Za-z0-9_-]{6,}/g;
@@ -70,10 +74,16 @@ function changedFiles() {
     const opts = { cwd: ROOT, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] };
     const tracked = execSync('git diff --name-only HEAD', opts);
     const untracked = execSync('git ls-files --others --exclude-standard', opts);
-    return [...tracked.split('\n'), ...untracked.split('\n')]
+    const git = [...tracked.split('\n'), ...untracked.split('\n')]
       .map((f) => f.trim())
       .filter(Boolean)
       .map((f) => join(ROOT, f));
+    // Always include .env-family files (gitignored, but the most likely place a
+    // secret lands) so --changed and the full scan agree on scope.
+    const env = ['.env', '.env.local', '.env.development.local', '.env.production.local']
+      .map((f) => join(ROOT, f))
+      .filter((p) => existsSync(p));
+    return [...git, ...env];
   } catch {
     return null; // not a git repo yet — caller falls back to full scan
   }

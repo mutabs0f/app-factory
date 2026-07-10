@@ -54,6 +54,7 @@ set search_path = ''
 as $$
 begin
   new.updated_at = now();
+  new.created_at = old.created_at; -- system-managed: clients cannot rewrite it via RLS
   return new;
 end;
 $$;

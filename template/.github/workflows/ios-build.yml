@@ -13,7 +13,9 @@ on:
 
 jobs:
   build:
-    runs-on: macos-14
+    # macos-15 ships Xcode 16.x by default; RN 0.81 / Expo SDK 54 require Xcode 16.1+
+    # (macos-14's default Xcode 15.4 cannot build the native project).
+    runs-on: macos-15
     strategy:
       fail-fast: false
       matrix:
@@ -30,6 +32,10 @@ jobs:
 
       - name: Write .env (public config)
         run: |
+          if [ -z "${{ vars.EXPO_PUBLIC_SUPABASE_URL }}" ] || [ -z "${{ vars.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY }}" ]; then
+            echo "::error::Set repo variables EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY (Settings → Secrets and variables → Actions → Variables). Building without them ships a non-launching IPA."
+            exit 1
+          fi
           echo "EXPO_PUBLIC_SUPABASE_URL=${{ vars.EXPO_PUBLIC_SUPABASE_URL }}" >> .env
           echo "EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY=${{ vars.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY }}" >> .env
 

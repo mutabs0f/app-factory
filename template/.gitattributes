@@ -1,0 +1,12 @@
+# Deterministic line endings so generated src/types/database.types.ts stays
+# byte-stable across clones (the verify.mjs types-freshness check compares it to
+# fresh `supabase gen types` output, which is always LF).
+* text=auto eol=lf
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.ico binary
+*.ttf binary
+*.otf binary
+*.woff binary
+*.woff2 binary

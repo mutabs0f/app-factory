@@ -30,9 +30,15 @@ export class LargeSecureStore {
   }
 
   async getItem(key: string): Promise<string | null> {
-    const encrypted = await AsyncStorage.getItem(key);
-    if (!encrypted) return null;
-    return this._decrypt(key, encrypted);
+    try {
+      const encrypted = await AsyncStorage.getItem(key);
+      if (!encrypted) return null;
+      return await this._decrypt(key, encrypted);
+    } catch {
+      // Corrupted ciphertext or a Keychain/Keystore error → treat as "no value"
+      // so Supabase falls back to signed-out and the user simply re-authenticates.
+      return null;
+    }
   }
 
   async setItem(key: string, value: string): Promise<void> {
