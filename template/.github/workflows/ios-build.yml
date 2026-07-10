@@ -1,0 +1,72 @@
+name: iOS build (unsigned IPA)
+
+# Builds an UNSIGNED .ipa on a GitHub-hosted macOS runner, for sideloading from
+# Windows with Sideloadly (free 7-day signing). No Apple Developer account needed.
+# Trigger manually (Actions → Run workflow) or by pushing a v* tag.
+# Set repository VARIABLES so the app can reach Supabase at runtime:
+#   EXPO_PUBLIC_SUPABASE_URL, EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY  (public config)
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ['v*']
+
+jobs:
+  build:
+    runs-on: macos-14
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: [release, dev-client]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - name: Write .env (public config)
+        run: |
+          echo "EXPO_PUBLIC_SUPABASE_URL=${{ vars.EXPO_PUBLIC_SUPABASE_URL }}" >> .env
+          echo "EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY=${{ vars.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY }}" >> .env
+
+      - name: Add expo-dev-client (dev-client variant only)
+        if: matrix.variant == 'dev-client'
+        run: npx expo install expo-dev-client
+
+      - name: Prebuild iOS native project
+        run: npx expo prebuild -p ios --clean
+
+      - name: Install CocoaPods
+        run: cd ios && pod install
+
+      - name: Resolve Xcode scheme
+        id: scheme
+        run: echo "name=$(ls ios/*.xcworkspace | head -1 | xargs basename | sed 's/\.xcworkspace//')" >> "$GITHUB_OUTPUT"
+
+      - name: Archive without code signing
+        run: |
+          cd ios
+          xcodebuild archive \
+            -workspace "${{ steps.scheme.outputs.name }}.xcworkspace" \
+            -scheme "${{ steps.scheme.outputs.name }}" \
+            -configuration Release \
+            -archivePath "$PWD/build/App.xcarchive" \
+            -destination "generic/platform=iOS" \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO
+
+      - name: Package unsigned .ipa (Payload/ zip trick)
+        run: |
+          cd ios/build
+          mkdir -p Payload
+          cp -R App.xcarchive/Products/Applications/*.app Payload/
+          zip -qr "app-${{ matrix.variant }}-unsigned.ipa" Payload
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ios-${{ matrix.variant }}-ipa
+          path: ios/build/app-${{ matrix.variant }}-unsigned.ipa
+          if-no-files-found: error

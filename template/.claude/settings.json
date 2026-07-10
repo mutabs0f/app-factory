@@ -1,0 +1,39 @@
+{
+  "enabledPlugins": {
+    "expo@claude-plugins-official": true
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          { "type": "command", "command": "node scripts/secret-scan.mjs --changed" }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          { "type": "command", "command": "node scripts/guard-bash.mjs" }
+        ]
+      }
+    ]
+  },
+  "permissions": {
+    "allow": [
+      "Bash(node scripts/verify.mjs)",
+      "Bash(node scripts/secret-scan.mjs:*)",
+      "Bash(node scripts/new-migration.mjs:*)",
+      "Bash(npx tsc:*)",
+      "Bash(npx eslint:*)",
+      "Bash(npx jest:*)",
+      "Bash(npx expo export:*)",
+      "Bash(supabase db reset)",
+      "Bash(supabase start)",
+      "Bash(supabase gen types:*)",
+      "Bash(git status)",
+      "Bash(git diff:*)"
+    ]
+  }
+}

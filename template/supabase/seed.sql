@@ -1,0 +1,4 @@
+-- seed.sql — runs after all migrations on `supabase db reset`.
+-- Auth users are created through the email-OTP flow (and their profile row is
+-- created by the on_auth_user_created trigger), so no users are seeded here.
+-- Add reference/lookup rows for your app below.
