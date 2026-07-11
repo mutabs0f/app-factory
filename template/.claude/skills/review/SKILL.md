@@ -28,13 +28,13 @@ Record each finding in `docs/REVIEW-LOG.md` (Findings table) — **on disk, not 
 - Each finding gets **at most 2 fix rounds** (tracked in the log's Rounds column). Still red after 2 → stop and escalate the real output to Basim; never a third silent attempt, never papered over.
 - Encode any multi-attempt fix as one line in `LESSONS.md`.
 
-## 5. The executed security gate (doc 04 §7)
+## 5. The executed security gate
 Beyond `verify.mjs`, run these against the live project and record results in `REVIEW-LOG.md` — all must be clean (or each explicitly waived with a written reason, e.g. leaked-password in `DECISIONS.md`):
 - **`get_advisors`** (security AND performance): zero unresolved.
 - **RLS coverage + secret scan**: green — `verify.mjs` asserts these; confirm, don't assume.
 - **No policy references `user_metadata`** (user-editable → privilege escalation).
 - **Storage buckets private** with their own `storage.objects` policies (only if the app uses storage).
-- **Supabase auth settings**: email confirmations ON, OTP expiry ≤ 3600s.
+- **Supabase auth settings**: email confirmations ON, OTP expiry ≤ 3600s, **and both email templates ("Confirm signup" + "Magic Link") contain `{{ .Token }}`** so they send the 6-digit code, not a link. `verify.mjs` can't catch this — record the verified template body or a real test-send in `REVIEW-LOG.md`.
 
 ## The exit — nothing reaches /ship until both hold
 1. `node scripts/verify.mjs` exits 0 on the FINAL tree this session — show the output.

@@ -10,6 +10,7 @@ Turn `/new-app <idea>` into three committed artifacts — a one-page SPEC, the s
 ## Before you start
 - Read `LESSONS.md` (repo root) and `docs/SPEC.md` (the skeleton you'll fill).
 - Bring the local stack up: `supabase start` (Docker) — the S1 gate needs it.
+- Wire the Supabase MCP: `cp .mcp.json.example .mcp.json`, set your dev project ref + `$SUPABASE_ACCESS_TOKEN` in your env (`get_advisors` and any MCP write need it), and put that **same dev ref in `.dev-branch`** — the push guard blocks MCP writes to anything not listed there.
 
 ## 1. Ask AT MOST 5 questions
 One batch, then stop asking. Cover only:
@@ -37,15 +38,17 @@ Scaffold, don't hand-write: `node scripts/new-migration.mjs <name>` per table/co
 No ambiguity survives into BUILD (malaki broke because an unresolved auth OR let client and server pick different halves). Lock these:
 - **Auth** → Email OTP + **custom SMTP (Resend)**. Required, not optional.
 - **Authorization** → Postgres RLS + matching GRANTs. The client is untrusted.
-- **Delivery** → pick ONE (decision tree below) and record the reason:
-  - needs remote **push** → **PWA**
-  - needs **custom native modules** → **dev-client sideload**
-  - wants a **real installed app** → **Expo Go dev + sideload IPA**
-  - **simple / shareable** → **PWA**
+- **Delivery** → walk this ORDERED list, take the FIRST match, record the reason (the DECISIONS default is sideload IPA):
+  1. needs **remote push while the app is closed** → **PWA** (push wins the tiebreak; note the limited iOS PWA-push support) — or a dev-client build if native push is truly mandatory.
+  2. else needs **custom native modules** → **dev-client sideload**.
+  3. else wants a **real installed app** (the default) → **Expo Go for dev + sideload IPA via Sideloadly**.
+  4. else **simplest / link-shareable** → **PWA**.
 - **Leaked-password protection** → **waived** (OTP-only; there are no user passwords).
 
-## 5. FLAG the Resend SMTP step
-Email OTP will NOT deliver codes on Supabase's free built-in email. Explicitly tell Basim: **custom SMTP (Resend) must be provisioned per project** before auth works — the app is blocked on it, not broken. Record it in `docs/DECISIONS.md` as a decision, not a silent assumption.
+## 5. FLAG the auth email setup (two dashboard steps, BOTH required)
+Email OTP won't work out of the box, and both fixes are dashboard-only config `verify.mjs` can never catch — so surface them to Basim and record in `docs/DECISIONS.md`; the app is blocked on them, not broken:
+1. **Custom SMTP (Resend)** must be provisioned per project — the free built-in email can't deliver the code at all.
+2. **Both email templates must send the code, not a link** — set the "Confirm signup" AND "Magic Link" bodies to contain `{{ .Token }}`. If either still sends a link, `verifyOtp` (which expects a 6-digit code) silently fails. This exact bug cost the pilot ("the code never arrived"). Confirm with a real test-send.
 
 ## The S1 gate (do not advance on red)
 Both must be green, and you must **show the output**:

@@ -1,7 +1,7 @@
 ---
 name: code-reviewer
 description: Fresh-context reviewer for a stage's git diff. Use in /review (S4) after a build stage, before ship. Reviews the diff against docs/SPEC.md and hunts the malaki failure classes. Read-only.
-tools: Read, Glob, Grep, Bash(git diff:*), Bash(git log:*), Bash(git status)
+tools: Read, Glob, Grep, Bash(git diff:*), Bash(git log:*), Bash(git status:*)
 model: inherit
 ---
 
