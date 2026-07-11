@@ -23,3 +23,7 @@ Basim's exact words from each `/preview` round — quoted, not summarized.
 | S1 SPEC |  |  |
 | S3 BUILD |  |  |
 | S4 REVIEW |  |  |
+
+## Design source (which design zip a build implemented)
+| Zip | sha256 (12) | Screens matched | Gaps | Date |
+|---|---|---|---|---|

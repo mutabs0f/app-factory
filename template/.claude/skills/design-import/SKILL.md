@@ -9,9 +9,22 @@ You are a **translator, not a designer.** Reproduce the input as given — layou
 
 ## Before you start
 - Read `docs/SPEC.md` (the screen list is authoritative) and `LESSONS.md` (repo root).
-- Read everything in `design/input/` — JSX/HTML artifacts, screenshots, and/or a written description.
 
-## Translate
+## 1. Import & reconcile the design zip (never invent a missing screen)
+Basim designs the app in Claude Design (from the `/new-app` brief) and drops the exported ZIP into `design/input/`. Run:
+```
+node scripts/design-import.mjs
+```
+It extracts the zip, validates the bundle (`tokens.jsx` + one `.jsx` per screen, optional `manifest.md`), reconciles the screens against SPEC, and records the zip filename+hash in `docs/REVIEW-LOG.md`. Act on the exit code — **never proceed silently past a gap**:
+- **3** (no zip) → Basim hasn't dropped it: point him at `design/DESIGN-BRIEF.md` → claude.ai → export ZIP → `design/input/`.
+- **2** (malformed or unsafe bundle) → re-export a clean zip: needs `tokens.jsx` + screen files, and no path-traversal / symlink entries.
+- **1** (gap) → one or more SPEC screens have NO design. **STOP and ask Basim** per missing screen: re-design it in Claude Design, or let you scaffold it plainly. Do not invent it.
+- **0** → every SPEC screen has a match in `design/input/_extracted/`. Proceed.
+- **4** (SPEC precondition) → `docs/SPEC.md` is missing or has no screen list: run `/new-app` first — don't import against nothing.
+
+The extracted files (per-screen JSX + `tokens.jsx`) are your source. Map JSX/HTML primitives to React Native: `div`→`View`, `p`/`span`/`h*`→`Text`, `img`→`expo-image`, `button`→`Pressable`, `input`→`TextInput`; keep every color/spacing value as a literal from `tokens.jsx`. If Basim dropped raw screenshots or a written description instead of a Claude Design zip, translate those directly (no import step).
+
+## Translate (faithful)
 1. For each screen in SPEC's screen list, build a screen component under `src/features/<feature>/<Screen>.tsx`; add a thin re-export route in `src/app/`.
 2. Match the input **exactly**: same layout structure, same spacing/padding, same colors (as literal values), same copy in the same language (EN/AR per SPEC), same element order. Do not restyle, rename, re-order, or "clean up."
 3. Feed each screen **local mock data** shaped like the eventual rows — hard-coded constants in the component or a `mocks.ts`. No `supabase` import anywhere; no `api.ts`/`hooks.ts` yet.

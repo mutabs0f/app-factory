@@ -43,3 +43,7 @@ S1 SPEC (`/new-app`) → S2 DESIGN + PREVIEW (`/design-import`, `/preview`) → 
 
 ## Secrets
 `EXPO_PUBLIC_*` vars are inlined into the JS bundle — public **configuration**, not secrets. Only `EXPO_PUBLIC_SUPABASE_URL` and the **publishable** key (`sb_publishable_…`, governed by RLS) belong in `.env`. The secret key (`sb_secret_…` / `service_role`) must NEVER appear in this repo — the PostToolUse hook and `scripts/secret-scan.mjs` enforce it.
+
+## Integrations & keys (Basim's decision, never a dotfile)
+- **No external service / API / SDK is added without Basim's explicit approval** of the S1 integrations table (service · what for · free? · keys · where to get). "Nice to have" is not a reason. Approved integrations go in `config/integrations.json` (names only, never values) + `docs/DECISIONS.md`.
+- **Never ask Basim to edit `.env`, and never hand-edit it yourself.** Keys are collected through `node scripts/collect-keys.mjs` — a local one-page browser form (127.0.0.1, one-time token, sends nothing anywhere). Public `EXPO_PUBLIC_*` config → `.env`; secret-shaped keys are **refused** from app files and routed server-side (`destination: supabase-secret`). `verify.mjs`'s `env complete` check gates on **presence** (never values) of the manifest's required keys.

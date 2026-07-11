@@ -1,0 +1,22 @@
+{
+  "keys": [
+    {
+      "env": "EXPO_PUBLIC_SUPABASE_URL",
+      "service": "Supabase",
+      "destination": "app-env",
+      "why": "The app's backend and database live in Supabase; this is the project address the app talks to.",
+      "howToGet": "Supabase dashboard → your project → Project Settings → API → Project URL",
+      "format": "^https://[a-z0-9]+\\.supabase\\.co$",
+      "required": true
+    },
+    {
+      "env": "EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY",
+      "service": "Supabase",
+      "destination": "app-env",
+      "why": "The PUBLIC key the app ships with to reach Supabase — safe to include, protected by row-level security.",
+      "howToGet": "Same page → API keys → publishable key (starts with sb_publishable_)",
+      "format": "^sb_publishable_[A-Za-z0-9_-]+$",
+      "required": true
+    }
+  ]
+}

@@ -9,9 +9,10 @@ Turn a green tree into a running app on Basim's phone. `/ship --dry-run` prints 
 
 ## Before you start
 - Read `docs/SPEC.md` and `LESSONS.md`.
-- **Preflight (both required, else STOP):**
+- **Preflight (all required, else STOP):**
   1. `node scripts/verify.mjs` exited 0 **in this session** — show the output. A stale green from earlier doesn't count.
   2. S4 `/review` is done and `docs/REVIEW-LOG.md` records it clean.
+  3. `node scripts/collect-keys.mjs --check` — every required API key is present (presence only, never values). Red → re-run `node scripts/collect-keys.mjs` before building; the app can't run without them.
 - Decide the path from `docs/SPEC.md`: **Native** (default, iOS app) vs **PWA** (web-target apps, or any app that needs remote push — the free Apple ID can't do push).
 
 ## Native path (default)

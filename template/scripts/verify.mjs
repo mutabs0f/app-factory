@@ -4,8 +4,8 @@
 // is green. A claim of "done" is a hint; THIS script's exit code is the verdict.
 //
 // Checks: 1 typecheck · 2 lint · 3 tests · 4 iOS bundle · 5 secret scan ·
-//         6 decisions resolved · 7 db reset + RLS + definer fn + table grants ·
-//         8 generated-types freshness
+//         6 decisions resolved · 7 env complete · 8 db reset + RLS + definer + grants ·
+//         9 generated-types freshness
 //
 // Assumes the local Supabase stack is running (`supabase start`). If Docker/local
 // Supabase is unavailable, the DB checks fail honestly (never skipped green).
@@ -181,6 +181,9 @@ async function waitForSchema(client, expectTables) {
 { const r = tryRun('node scripts/secret-scan.mjs'); record('secret scan', r.ok, r.ok ? '' : tail(r.out)); }
 // 6 — every OR-decision resolved to one choice (anti-malaki; docs-only, so it always runs)
 checkDecisionsResolved();
+// 7 — required API keys present (PRESENCE only, never values; per config/integrations.json).
+// Red on a fresh app until `/new-app` runs collect-keys.mjs; green once .env is filled.
+{ const r = tryRun('node scripts/collect-keys.mjs --check'); record('env complete', r.ok, r.ok ? '' : tail(r.out, 3)); }
 
 // 6 — full migration replay + RLS coverage
 const reset = tryRun('supabase db reset');

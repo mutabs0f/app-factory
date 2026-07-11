@@ -114,7 +114,7 @@ console.log('  #   ls .claude/skills/supabase .claude/skills/supabase-postgres-b
 console.log('  # cp .mcp.json.example .mcp.json   + set SUPABASE_ACCESS_TOKEN in your env');
 console.log('  # put your DEV Supabase project ref in .dev-branch (the push guard needs it)');
 console.log('  # gh repo create <slug> --source . --push   (ask Basim public/private)');
-console.log('  # copy .env.example -> .env, fill in the dev Supabase URL + publishable key');
+console.log('  #   keys are collected via `node scripts/collect-keys.mjs` during /new-app — never hand-edit .env');
 console.log('  # connect Resend SMTP on the Supabase project (email OTP needs it)');
 console.log('  supabase start');
 console.log('  # then in Claude Code:  /new-app "<your idea>"');
