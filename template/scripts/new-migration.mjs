@@ -48,6 +48,10 @@ create policy "insert own" on public.${table} for insert to authenticated with c
 create policy "update own" on public.${table} for update to authenticated
   using ((select auth.uid()) = user_id) with check ((select auth.uid()) = user_id);
 create policy "delete own" on public.${table} for delete to authenticated using ((select auth.uid()) = user_id);
+
+-- REQUIRED: policies alone don't grant access under Supabase's always-revoked
+-- default — the authenticated role needs matching GRANTs (match your policy ops).
+grant select, insert, update, delete on public.${table} to authenticated;
 `;
 
 writeFileSync(file, template);

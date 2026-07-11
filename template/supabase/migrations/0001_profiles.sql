@@ -28,6 +28,11 @@ create policy "update own profile" on public.profiles
   with check ((select auth.uid()) = id);
 -- No DELETE policy on purpose: profiles are removed only by the auth.users cascade.
 
+-- REQUIRED under Supabase's always-revoked API-exposure default: policies alone do
+-- NOT grant access — without GRANTs the authenticated role gets "permission denied".
+-- The GRANT list matches the policy operations (no delete policy → no delete grant).
+grant select, insert, update on public.profiles to authenticated;
+
 -- Auto-create the profile row when a new auth user signs up.
 -- security definer + empty search_path per Supabase hardening guidance.
 create function public.handle_new_user()

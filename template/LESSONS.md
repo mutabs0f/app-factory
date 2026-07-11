@@ -24,6 +24,17 @@ template itself — so the next app is born without the bug.
   trigger runs as owner), so end the migration with
   `revoke execute on function public.<fn>() from public, anon, authenticated;`.
   verify.mjs now checks this locally ("definer fn exposure").
-- **Email OTP needs `{{ .Token }}` in the Magic Link email template** (dashboard →
-  Authentication → Email Templates), or the email sends a magic link instead of the
-  6-digit code the app's verify-otp screen expects.
+- **Email OTP needs `{{ .Token }}` in BOTH the "Confirm signup" (first-time users)
+  AND "Magic Link" (returning users) templates** (dashboard → Authentication → Email
+  Templates). A new user's first `signInWithOtp` sends the "Confirm signup" email —
+  by default a link to the Site URL (localhost:3000), which fails — not the code.
+  Also: a first-time signup verifies with `verifyOtp({type:'signup'})`, so
+  features/auth/api.ts tries type 'email' then falls back to 'signup'.
+- **The free built-in Supabase email service CANNOT deliver OTP codes.** It only
+  sends link-based emails, and the template body is READ-ONLY until you connect a
+  provider ("Set up custom SMTP to edit the source"). So the email-OTP *code* flow
+  REQUIRES custom SMTP (e.g. Resend free tier) configured per project — then set
+  both templates to `{{ .Token }}`. `/new-app` must provision SMTP as part of setup.
+  Verified on the pilot 2026-07-10: app + auth wiring worked end-to-end (account +
+  auto-profile created), but the code never arrived because built-in email sends
+  links only. Without SMTP the only built-in path is magic-LINK + deep-linking.

@@ -130,6 +130,32 @@ if (reset.ok) {
           ' — revoke execute from anon, authenticated',
       );
     else record('definer fn exposure', true, 'no exposed SECURITY DEFINER functions');
+
+    // Table GRANTs must match policy operations. Under Supabase's always-revoked
+    // exposure default, RLS + policies alone do NOT let the app reach the table —
+    // the authenticated role needs matching GRANTs or every query gets
+    // "permission denied". (RLS-with-policies is NOT proof the app can read it.)
+    const { rows: grantGaps } = await client.query(`
+      with pol as (
+        select pp.tablename,
+               case when pp.cmd = 'ALL'
+                    then array['SELECT','INSERT','UPDATE','DELETE']
+                    else array[pp.cmd] end as ops
+        from pg_policies pp
+        where pp.schemaname = 'public'
+      ),
+      expanded as (select tablename, unnest(ops) as op from pol)
+      select distinct e.tablename, e.op
+      from expanded e
+      where not has_table_privilege('authenticated', ('public.' || quote_ident(e.tablename))::regclass, e.op);`);
+    if (grantGaps.length)
+      record(
+        'table grants',
+        false,
+        'authenticated lacks GRANT for policy op(s): ' +
+          grantGaps.map((g) => `${g.tablename}.${g.op}`).join(', ') + ' — add matching GRANTs',
+      );
+    else record('table grants', true, 'grants match policy operations');
   } catch (e) {
     record('RLS coverage', false, `DB query failed: ${e.message}`);
   } finally {
