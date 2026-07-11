@@ -17,6 +17,18 @@
         "hooks": [
           { "type": "command", "command": "node scripts/guard-bash.mjs" }
         ]
+      },
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          { "type": "command", "command": "node scripts/guard-bash.mjs" }
+        ]
+      },
+      {
+        "matcher": "mcp__.*__(apply_migration|execute_sql|deploy_edge_function|merge_branch|reset_branch)",
+        "hooks": [
+          { "type": "command", "command": "node scripts/guard-bash.mjs" }
+        ]
       }
     ]
   },

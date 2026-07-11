@@ -16,7 +16,7 @@ This repo builds a mobile app on **Expo SDK 54 + Supabase** (thin-client model).
 ## The stack (fixed — no "OR"s)
 - **Client:** Expo SDK 54 (pinned), TypeScript strict, expo-router. `@/*` → `./src/*`.
 - **Data & auth:** Supabase via `@supabase/supabase-js`. **Postgres RLS is the only authorization layer; the client is untrusted.**
-- **Auth:** email OTP — `signInWithOtp({email})` → `verifyOtp({email, token, type:'email'})`. No magic links, no deep links.
+- **Auth:** email OTP — `signInWithOtp({email})` → `verifyOtp({email, token, type:'email'})` (first-time users fall back to `type:'signup'`, gated on the error — see `src/features/auth/api.ts`). No magic links, no deep links. **Requires custom SMTP** — the free built-in email can't deliver codes; provision Resend per project (doc 04 §1).
 - **Session storage:** `LargeSecureStore` (`src/lib/storage.ts`) — ships in the template, reused as-is.
 - **Server logic:** Postgres `.rpc()` for atomic multi-statement ops; **Edge Functions only** for third-party secrets, signed webhooks, or server-authoritative logic (money, credits, cross-user writes).
 - **Schema changes:** only by adding files to `supabase/migrations/` (never the dashboard). After each migration, regenerate types and run `get_advisors`.
@@ -26,12 +26,16 @@ This repo builds a mobile app on **Expo SDK 54 + Supabase** (thin-client model).
 2. `import { supabase }` only in `src/lib/*` and `src/features/*/api.ts`. Screens/components use the feature's hooks.
 3. Every `api.ts` function has an explicit return type built from `database.types.ts`.
 4. Schema changes only via `supabase/migrations/`; regenerate types + advisors after each.
-5. Every new-table migration includes RLS + per-op policies + policy-column indexes — scaffold with `node scripts/new-migration.mjs <name>`.
+5. Every new-table migration includes RLS + per-op policies + policy-column indexes + **matching `GRANT`s** (policies alone don't grant access under Supabase's always-revoked default) — scaffold with `node scripts/new-migration.mjs <name>`.
 6. Absolute `@/` imports across layers; no barrel `index.ts` re-exports.
 7. A new external secret ⇒ a new Edge Function. Never a key in the app.
 
 ## The gate — `node scripts/verify.mjs`
-Runs, in order: typecheck · lint · jest · `expo export` · `supabase db reset` + RLS coverage · secret scan · generated-types freshness. Requires `supabase start` running (Docker). Exit 0 is the only "done".
+Runs: typecheck · lint · jest · `expo export` · secret scan · `supabase db reset` + RLS coverage + definer-fn exposure + table GRANTs · generated-types freshness. Requires `supabase start` running (Docker). Exit 0 is the only "done".
+
+## Gate integrity (do not weaken)
+- **Never edit `scripts/verify.mjs`, `scripts/guard-bash.mjs`, or `.claude/settings.json`** (the deterministic gate + its hooks) without Basim's explicit approval. A PreToolUse hook flags such edits and blocks shell writes to them — do not route around it. Weakening a check to make it pass is the cardinal sin of this project.
+- **MCP database writes** (`apply_migration`, mutating `execute_sql`, `deploy_edge_function`, `merge_branch`, `reset_branch`) go only to a **dev branch**, and only after `verify.mjs` is green on the current tree — never to a linked production project. The push guard enforces both.
 
 ## Stage flow (one Claude session per app)
 S1 SPEC (`/new-app`) → S2 DESIGN + PREVIEW (`/design-import`, `/preview`) → S3 BUILD (`/build` under a `/goal` loop until verify is green) → S4 REVIEW (`/review`: fresh-context reviewer + `/code-review`) → S5 SHIP (`/ship`) → S6 MAINTAIN.

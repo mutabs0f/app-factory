@@ -10,7 +10,7 @@
 // Supabase is unavailable, checks 6 & 7 fail honestly (never skipped green).
 import { execSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import pg from 'pg';
 
@@ -37,11 +37,29 @@ refreshWindowsPath();
 // A hash of git state, so the push guard can tell whether the working tree changed
 // since verify last passed (the .verify-pass marker embeds it).
 function stateHash() {
-  const opt = { cwd: TEMPLATE, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] };
+  const q = { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] };
   try {
-    const head = execSync('git rev-parse HEAD', opt).trim();
-    const dirty = execSync('git status --porcelain', opt);
-    return createHash('sha256').update(`${head}\n${dirty}`).digest('hex');
+    // Discover the repo root + real .git dir (works even when run from a subdir),
+    // then hash the full working-tree CONTENT (not just `git status` paths): a
+    // throwaway index + write-tree is content-addressed, so editing an ALREADY-dirty
+    // file changes it too. .gitignored paths (incl. .verify-pass, .env, node_modules)
+    // are excluded automatically; the real index is untouched. Identical in guard-bash.mjs.
+    const root = execSync('git rev-parse --show-toplevel', q).trim();
+    const gitDir = execSync('git rev-parse --absolute-git-dir', q).trim();
+    const head = execSync('git rev-parse HEAD', q).trim();
+    const tmpIndex = join(gitDir, `verify-index-${process.pid}`);
+    const idxOpt = { cwd: root, ...q, env: { ...process.env, GIT_INDEX_FILE: tmpIndex } };
+    try {
+      execSync('git add -A', idxOpt);
+      const tree = execSync('git write-tree', idxOpt).trim();
+      return createHash('sha256').update(`${head}\n${tree}`).digest('hex');
+    } finally {
+      try {
+        rmSync(tmpIndex, { force: true });
+      } catch {
+        /* ignore */
+      }
+    }
   } catch {
     return 'nogit';
   }
@@ -56,6 +74,37 @@ function tryRun(cmd) {
     return { ok: true, out: execSync(cmd, { cwd: TEMPLATE, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }) };
   } catch (e) {
     return { ok: false, out: (((e.stdout || '') + (e.stderr || '')).trim()) || e.message };
+  }
+}
+
+function countMigrationFiles() {
+  try {
+    return readdirSync(join(TEMPLATE, 'supabase', 'migrations')).filter((f) => f.endsWith('.sql'))
+      .length;
+  } catch {
+    return 0;
+  }
+}
+
+// Ride out the container-restart race: `supabase db reset` can return while the DB
+// container is still restarting, so the schema query can transiently see 0 tables
+// (which used to flash a false "no public tables" green). Poll until a public table
+// exists; the vacuous-green guard below then FAILs if migrations exist but nothing did.
+async function waitForSchema(client, expectTables) {
+  if (!expectTables) return;
+  const deadline = Date.now() + 20000;
+  while (Date.now() < deadline) {
+    try {
+      const { rows } = await client.query(
+        `select count(*)::int as n from pg_class c
+         join pg_namespace n on n.oid = c.relnamespace
+         where n.nspname = 'public' and c.relkind = 'r'`,
+      );
+      if (rows[0].n > 0) return;
+    } catch {
+      /* schema not ready yet */
+    }
+    await new Promise((r) => setTimeout(r, 1000));
   }
 }
 
@@ -75,9 +124,11 @@ const reset = tryRun('supabase db reset');
 record('db reset (migration replay)', reset.ok, reset.ok ? '' : tail(reset.out));
 
 if (reset.ok) {
+  const migCount = countMigrationFiles();
   const client = new pg.Client({ connectionString: DB_URL });
   try {
     await client.connect();
+    await waitForSchema(client, migCount > 0); // guard the container-restart race
     // Base tables only; view/matview RLS-bypass is covered by get_advisors (CLAUDE.md).
     // permissive_count flags `using(true)`/`with check(true)` — RLS present but wide open.
     const { rows } = await client.query(`
@@ -94,7 +145,17 @@ if (reset.ok) {
     const bad = rows.filter(
       (r) => !r.rls_enabled || Number(r.policy_count) === 0 || Number(r.permissive_count) > 0,
     );
-    if (rows.length === 0) record('RLS coverage', true, 'no public tables');
+    if (rows.length === 0) {
+      // Vacuous-green guard: migrations exist but nothing materialized → the reset
+      // did not apply the schema (race or failure), NOT a legitimately empty DB.
+      if (migCount > 0)
+        record(
+          'RLS coverage',
+          false,
+          `${migCount} migration(s) present but 0 public tables — db reset did not materialize the schema`,
+        );
+      else record('RLS coverage', true, 'no migrations, no public tables');
+    }
     else if (bad.length)
       record(
         'RLS coverage',
