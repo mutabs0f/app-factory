@@ -38,6 +38,12 @@ yarn-error.*
 # verify.mjs pass marker
 .verify-pass
 
+# agent guardrail skills — declared in skills-lock.json, installed with
+# `npx skills add` (like node_modules). Not committed: avoids Windows symlink
+# breakage on clone; the scaffolder installs them per app.
+.agents/
+.claude/skills/
+
 # typescript
 *.tsbuildinfo
 

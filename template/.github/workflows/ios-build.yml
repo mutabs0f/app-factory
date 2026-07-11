@@ -49,6 +49,21 @@ jobs:
       - name: Install CocoaPods
         run: cd ios && pod install
 
+      - name: Strip push/iCloud entitlements (free signing rejects them)
+        run: |
+          for ENT in ios/*/*.entitlements; do
+            [ -f "$ENT" ] || continue
+            for KEY in aps-environment \
+                       com.apple.developer.icloud-container-identifiers \
+                       com.apple.developer.icloud-services \
+                       com.apple.developer.ubiquity-kvstore-identifier \
+                       com.apple.developer.associated-domains \
+                       com.apple.developer.applesignin; do
+              /usr/libexec/PlistBuddy -c "Delete :$KEY" "$ENT" 2>/dev/null || true
+            done
+            echo "Stripped restricted entitlements from $ENT"
+          done
+
       - name: Resolve Xcode scheme
         id: scheme
         run: echo "name=$(ls ios/*.xcworkspace | head -1 | xargs basename | sed 's/\.xcworkspace//')" >> "$GITHUB_OUTPUT"
