@@ -16,7 +16,7 @@ This repo builds a mobile app on **Expo SDK 54 + Supabase** (thin-client model).
 ## The stack (fixed — no "OR"s)
 - **Client:** Expo SDK 54 (pinned), TypeScript strict, expo-router. `@/*` → `./src/*`.
 - **Data & auth:** Supabase via `@supabase/supabase-js`. **Postgres RLS is the only authorization layer; the client is untrusted.**
-- **Auth:** email OTP — `signInWithOtp({email})` → `verifyOtp({email, token, type:'email'})` (first-time users fall back to `type:'signup'`, gated on the error — see `src/features/auth/api.ts`). No magic links, no deep links. **Requires custom SMTP** — the free built-in email can't deliver codes; provision Resend per project (doc 04 §1).
+- **Auth:** email OTP — `signInWithOtp({email})` → `verifyOtp({email, token, type:'email'})` (first-time users fall back to `type:'signup'`, gated on the error — see `src/features/auth/api.ts`). No magic links, no deep links. **Requires custom SMTP** — the free built-in email can't deliver codes; provision Resend per project (see `docs/DECISIONS.md`).
 - **Session storage:** `LargeSecureStore` (`src/lib/storage.ts`) — ships in the template, reused as-is.
 - **Server logic:** Postgres `.rpc()` for atomic multi-statement ops; **Edge Functions only** for third-party secrets, signed webhooks, or server-authoritative logic (money, credits, cross-user writes).
 - **Schema changes:** only by adding files to `supabase/migrations/` (never the dashboard). After each migration, regenerate types and run `get_advisors`.

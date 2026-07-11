@@ -18,5 +18,5 @@
 -
 
 ## Delivery target
-- **Path** (doc 03 decision tree): Expo Go for dev + sideload IPA · or PWA
+- **Path** (delivery decision tree — see /new-app): Expo Go for dev + sideload IPA · or PWA
 - **Reason:**
