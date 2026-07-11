@@ -39,10 +39,12 @@ yarn-error.*
 .verify-pass
 
 # agent guardrail skills — declared in skills-lock.json, installed with
-# `npx skills add` (like node_modules). Not committed: avoids Windows symlink
-# breakage on clone; the scaffolder installs them per app.
+# `npx skills add` (like node_modules). Ignore only the INSTALLED symlink dirs
+# (not the factory's own skills like build/, new-app/, review/): avoids Windows
+# symlink breakage on clone; the scaffolder reinstalls them per app.
 .agents/
-.claude/skills/
+.claude/skills/supabase
+.claude/skills/supabase-postgres-best-practices
 
 # typescript
 *.tsbuildinfo
