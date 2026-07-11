@@ -1,0 +1,11 @@
+# Dev-only Supabase project refs allowed to receive MCP cloud writes (one ref per line).
+#
+# The PreToolUse push guard (scripts/guard-bash.mjs) BLOCKS project-scoped MCP writes —
+# apply_migration / execute_sql / deploy_edge_function / pause_project / restore_project —
+# to ANY ref not listed here, independent of verify state, so a green tree can never write
+# to production. (Branch-scoped ops — merge/reset/delete branch — and `supabase db push`
+# carry no checkable project ref and are blocked outright.)
+#
+# Add your DEV branch/project ref (from the Supabase dashboard URL, e.g. abcdefgh...).
+# It is a project ref, not a secret. An empty list (only comments) blocks every MCP
+# cloud write, which is the safe default — /new-app fills this in for the app's dev project.

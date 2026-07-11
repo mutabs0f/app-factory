@@ -3,20 +3,45 @@
 // Runs all checks, reports each independently, and exits 0 ONLY when every one
 // is green. A claim of "done" is a hint; THIS script's exit code is the verdict.
 //
-// Checks: 1 typecheck · 2 lint · 3 tests · 4 iOS bundle · 5 secret scan
-//         6 db reset + RLS coverage · 7 generated-types freshness
+// Checks: 1 typecheck · 2 lint · 3 tests · 4 iOS bundle · 5 secret scan ·
+//         6 decisions resolved · 7 db reset + RLS + definer fn + table grants ·
+//         8 generated-types freshness
 //
 // Assumes the local Supabase stack is running (`supabase start`). If Docker/local
-// Supabase is unavailable, checks 6 & 7 fail honestly (never skipped green).
+// Supabase is unavailable, the DB checks fail honestly (never skipped green).
 import { execSync } from 'node:child_process';
-import { createHash } from 'node:crypto';
-import { readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { createHash, createHmac, randomBytes } from 'node:crypto';
+import { existsSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { homedir } from 'node:os';
 import { join } from 'node:path';
 import pg from 'pg';
 
 const TEMPLATE = process.cwd();
 const DB_URL =
   process.env.SUPABASE_DB_URL || 'postgresql://postgres:postgres@127.0.0.1:54322/postgres';
+
+// Per-machine secret (OUTSIDE the repo) that HMAC-signs the .verify-pass marker, so
+// the marker can't be forged by an agent re-running the public git-plumbing hash.
+// verify.mjs creates it on first green run; the push guard only reads it. It lives in
+// the user's home dir, not the tree, so it is not committed and not in stateHash().
+const SECRET_FILE = join(homedir(), '.app-factory-gate-secret');
+function gateSecret() {
+  try {
+    if (existsSync(SECRET_FILE)) {
+      const s = readFileSync(SECRET_FILE, 'utf8').trim();
+      if (s) return s;
+    }
+  } catch {
+    /* fall through to (re)create */
+  }
+  const s = randomBytes(32).toString('hex');
+  try {
+    writeFileSync(SECRET_FILE, s, { mode: 0o600 });
+  } catch {
+    /* best effort — a missing secret makes the guard fail CLOSED, which is safe */
+  }
+  return s;
+}
 
 // Docker/Supabase may have been installed after this shell started; pull the live
 // PATH from the registry so their binaries resolve (Windows factory host).
@@ -86,6 +111,42 @@ function countMigrationFiles() {
   }
 }
 
+// Anti-malaki mechanical check: every decision in docs/DECISIONS.md must be resolved to
+// ONE choice. An empty Choice cell or a Choice still holding an "OR" is exactly the
+// ambiguity that let malaki's client and server pick different halves — so fail the gate
+// on it instead of trusting prose. Only the Choice column is inspected (not the rationale).
+function checkDecisionsResolved() {
+  let text;
+  try {
+    text = readFileSync(join(TEMPLATE, 'docs', 'DECISIONS.md'), 'utf8');
+  } catch {
+    record('decisions resolved', false, 'docs/DECISIONS.md not found');
+    return;
+  }
+  const problems = [];
+  let dataRows = 0;
+  for (const line of text.split('\n')) {
+    if (!line.trim().startsWith('|')) continue;
+    const cells = line.split('|').map((c) => c.trim());
+    const decision = cells[1] ?? '';
+    const choice = cells[2] ?? '';
+    if (!decision || /^:?-+:?$/.test(decision) || decision.toLowerCase() === 'decision') continue; // header / --- / :--- separator
+    dataRows++;
+    if (!choice) problems.push(`"${decision}": Choice is empty`);
+    // Any "X or Y" reads as unresolved — no exemption. A deliberate "support both" must be
+    // written WITHOUT "or" (use "+"/"and": "Apple + Google"). An earlier whole-cell exemption
+    // for +/and/both let "X or Y ... and revisit later" slip through — a real split-brain hole.
+    else if (/\s+or\s+/i.test(choice) || /\bOR\b/.test(choice))
+      problems.push(`"${decision}": unresolved OR in Choice ("${choice}") — write "support both" as "X + Y"`);
+  }
+  if (dataRows === 0) problems.push('no decision rows found — the DECISIONS.md table is empty');
+  record(
+    'decisions resolved',
+    problems.length === 0,
+    problems.length ? problems.join('; ') : `${dataRows} decision(s), each resolved to one choice`,
+  );
+}
+
 // Ride out the container-restart race: `supabase db reset` can return while the DB
 // container is still restarting, so the schema query can transiently see 0 tables
 // (which used to flash a false "no public tables" green). Poll until a public table
@@ -118,6 +179,8 @@ async function waitForSchema(client, expectTables) {
 { const r = tryRun('npx expo export --platform ios'); record('iOS bundle (expo export)', r.ok, r.ok ? '' : tail(r.out)); }
 // 5 — no secrets anywhere (before DB checks, so it can never be skipped by an earlier failure)
 { const r = tryRun('node scripts/secret-scan.mjs'); record('secret scan', r.ok, r.ok ? '' : tail(r.out)); }
+// 6 — every OR-decision resolved to one choice (anti-malaki; docs-only, so it always runs)
+checkDecisionsResolved();
 
 // 6 — full migration replay + RLS coverage
 const reset = tryRun('supabase db reset');
@@ -266,7 +329,10 @@ console.log(
 // state, so a later working-tree change invalidates the "verified" pass.
 if (allOk) {
   try {
-    writeFileSync(join(TEMPLATE, '.verify-pass'), `${Date.now()}:${stateHash()}`);
+    const ts = Date.now();
+    const hash = stateHash();
+    const mac = createHmac('sha256', gateSecret()).update(`${ts}:${hash}`).digest('hex');
+    writeFileSync(join(TEMPLATE, '.verify-pass'), `${ts}:${hash}:${mac}`);
   } catch {
     /* marker is best-effort */
   }
