@@ -1,0 +1,318 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI Office — live factory floor</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🏢</text></svg>">
+<style>
+  :root {
+    --bg: #0e1117; --floor: #161b26; --room: #1d2433; --room-edge: #2c3650;
+    --ink: #e6ebf5; --dim: #8b96ad; --accent: #4f8cff; --green: #2ecc71;
+    --red: #e74c3c; --amber: #f1c40f;
+  }
+  * { box-sizing: border-box; margin: 0; }
+  body { background: var(--bg); color: var(--ink); font-family: 'Segoe UI', system-ui, sans-serif; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+
+  header { display: flex; align-items: center; gap: 14px; padding: 10px 18px; border-bottom: 1px solid var(--room-edge); }
+  header h1 { font-size: 1.05rem; font-weight: 600; }
+  .badge { font-size: .7rem; padding: 3px 9px; border-radius: 20px; background: var(--accent); color: #fff; letter-spacing: .08em; }
+  .badge.demo { background: var(--amber); color: #222; }
+  .stages { display: flex; gap: 6px; margin-left: auto; }
+  .stage { font-size: .68rem; padding: 3px 9px; border-radius: 6px; background: var(--room); color: var(--dim); border: 1px solid var(--room-edge); }
+  .stage.on { background: var(--accent); color: #fff; border-color: var(--accent); box-shadow: 0 0 12px #4f8cff66; }
+  #clock { font-variant-numeric: tabular-nums; color: var(--dim); font-size: .8rem; }
+
+  #floorwrap { flex: 1; position: relative; padding: 14px; min-height: 0; }
+  #floor { position: relative; width: 100%; height: 100%; background:
+      repeating-linear-gradient(0deg, transparent 0 38px, #ffffff06 38px 39px),
+      repeating-linear-gradient(90deg, transparent 0 38px, #ffffff06 38px 39px),
+      var(--floor);
+    border: 1px solid var(--room-edge); border-radius: 16px; overflow: hidden; }
+
+  .room { position: absolute; background: var(--room); border: 1px solid var(--room-edge); border-radius: 12px; padding: 8px 10px; }
+  .room .label { font-size: .66rem; color: var(--dim); letter-spacing: .1em; text-transform: uppercase; }
+  .room .desk { position: absolute; bottom: 8px; right: 10px; font-size: 1.1rem; opacity: .5; }
+  .room.active { border-color: var(--accent); box-shadow: inset 0 0 24px #4f8cff22, 0 0 14px #4f8cff33; }
+
+  /* the verify gate wall */
+  #gate .lights { display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; margin-top: 7px; }
+  #gate .light { height: 9px; border-radius: 3px; background: #333c50; transition: background .3s; }
+  #gate .light.ok { background: var(--green); box-shadow: 0 0 7px #2ecc7188; }
+  #gate .light.bad { background: var(--red); box-shadow: 0 0 7px #e74c3c88; }
+  #gate .light.run { background: var(--amber); animation: blink .5s infinite alternate; }
+  @keyframes blink { to { opacity: .35; } }
+  #gate .verdict { font-size: .72rem; margin-top: 6px; color: var(--dim); }
+
+  .emp { position: absolute; width: 64px; text-align: center; transition: left 1.4s cubic-bezier(.45,.05,.35,1), top 1.4s cubic-bezier(.45,.05,.35,1); z-index: 5; }
+  .emp .face { width: 42px; height: 42px; margin: 0 auto; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.35rem; background: #2a3348; border: 2px solid #3a4a6e; transition: border-color .3s; }
+  .emp.working .face { border-color: var(--accent); animation: workpulse 1.1s infinite alternate; }
+  .emp.walking .face { animation: waddle .35s infinite alternate; }
+  @keyframes workpulse { to { box-shadow: 0 0 16px #4f8cff88; } }
+  @keyframes waddle { from { transform: rotate(-7deg); } to { transform: rotate(7deg); } }
+  .emp .name { font-size: .64rem; margin-top: 3px; color: var(--dim); }
+  .emp .bubble { position: absolute; bottom: 108%; left: 50%; transform: translateX(-50%); background: #fff; color: #16202e; font-size: .62rem; line-height: 1.25; padding: 5px 8px; border-radius: 8px; width: 150px; opacity: 0; transition: opacity .4s; pointer-events: none; z-index: 9; word-break: break-all; }
+  .emp .bubble::after { content: ''; position: absolute; top: 100%; left: 50%; margin-left: -5px; border: 5px solid transparent; border-top-color: #fff; }
+  .emp .bubble.show { opacity: 1; }
+
+  #ticker { border-top: 1px solid var(--room-edge); padding: 8px 18px; height: 118px; overflow: hidden; font-size: .74rem; }
+  #ticker .line { color: var(--dim); padding: 1.5px 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #ticker .line:first-child { color: var(--ink); }
+  #ticker .line .who { color: var(--accent); font-weight: 600; }
+  #ticker .line .tm { color: #566; margin-right: 8px; font-variant-numeric: tabular-nums; }
+
+  #confetti { position: absolute; inset: 0; pointer-events: none; z-index: 20; }
+  .party { position: absolute; font-size: 1.2rem; animation: fall 2.6s linear forwards; }
+  @keyframes fall { from { transform: translateY(-40px) rotate(0); opacity: 1; } to { transform: translateY(105vh) rotate(720deg); opacity: .6; } }
+</style>
+</head>
+<body>
+<header>
+  <span style="font-size:1.3rem">🏢</span>
+  <h1 id="title">AI Office</h1>
+  <span class="badge" id="mode">LIVE</span>
+  <div class="stages" id="stages"></div>
+  <span id="clock"></span>
+</header>
+
+<div id="floorwrap"><div id="floor"></div><div id="confetti"></div></div>
+<div id="ticker"></div>
+
+<script>
+'use strict';
+// ---------- the cast ----------
+const EMPLOYEES = {
+  rakan:  { name: 'Rakan · Spec',      emoji: '📋', desk: 'spec' },
+  layla:  { name: 'Layla · Design',    emoji: '🎨', desk: 'design' },
+  omar:   { name: 'Omar · Builder',    emoji: '💻', desk: 'build' },
+  sara:   { name: 'Sara · Reviewer',   emoji: '🔍', desk: 'review' },
+  huda:   { name: 'Huda · Database',   emoji: '🗄️', desk: 'db' },
+  faisal: { name: 'Faisal · Security', emoji: '🛡️', desk: 'security' },
+  nasser: { name: 'Nasser · Shipping', emoji: '🚀', desk: 'ship' },
+};
+const ROOMS = { // x, y, w, h in % of the floor
+  spec:     { label: 'Spec Office',    x: 2,  y: 4,  w: 20, h: 26, desk: '🪑' },
+  design:   { label: 'Design Studio',  x: 2,  y: 36, w: 20, h: 26, desk: '🖥️' },
+  db:       { label: 'Database Room',  x: 2,  y: 68, w: 20, h: 27, desk: '🗄️' },
+  build:    { label: 'Build Bay',      x: 26, y: 26, w: 27, h: 44, desk: '⌨️' },
+  gate:     { label: 'The Gate · verify.mjs', x: 26, y: 74, w: 27, h: 21 },
+  review:   { label: 'Review Room',    x: 57, y: 4,  w: 19, h: 30, desk: '📖' },
+  security: { label: 'Security',       x: 57, y: 40, w: 19, h: 26, desk: '🔐' },
+  ship:     { label: 'Ship Dock',      x: 80, y: 40, w: 18, h: 26, desk: '📦' },
+  breakroom:{ label: 'Break Room',     x: 57, y: 72, w: 41, h: 23, desk: '☕' },
+  ceo:      { label: "Basim's Office", x: 80, y: 4,  w: 18, h: 30, desk: '👑' },
+};
+const CHECKS = ['types','lint','tests','bundle','migrate','rls','grants','definer','fresh','secrets','decisions','env'];
+const STAGES = ['S1 Spec','S2 Design','S3 Build','S4 Review','S5 Ship'];
+
+// ---------- scene ----------
+const floor = document.getElementById('floor');
+for (const [id, r] of Object.entries(ROOMS)) {
+  const d = document.createElement('div');
+  d.className = 'room'; d.id = 'room-' + id;
+  d.style.cssText = `left:${r.x}%;top:${r.y}%;width:${r.w}%;height:${r.h}%`;
+  d.innerHTML = `<div class="label">${r.label}</div>` + (r.desk ? `<div class="desk">${r.desk}</div>` : '');
+  if (id === 'gate') {
+    d.id = 'gate';
+    d.innerHTML = `<div class="label">${r.label}</div><div class="lights">` +
+      CHECKS.map(c => `<div class="light" id="light-${c}" title="${c}"></div>`).join('') +
+      `</div><div class="verdict" id="verdict">no run yet</div>`;
+  }
+  floor.appendChild(d);
+}
+const stagesEl = document.getElementById('stages');
+STAGES.forEach((s, i) => { const c = document.createElement('span'); c.className = 'stage'; c.id = 'stage-' + i; c.textContent = s; stagesEl.appendChild(c); });
+
+const state = {};
+for (const [id, e] of Object.entries(EMPLOYEES)) {
+  const el = document.createElement('div');
+  el.className = 'emp'; el.id = 'emp-' + id;
+  el.innerHTML = `<div class="bubble"></div><div class="face">${e.emoji}</div><div class="name">${e.name}</div>`;
+  floor.appendChild(el);
+  state[id] = { el, room: 'breakroom', lastActive: 0 };
+  place(id, 'breakroom', true);
+}
+
+function roomSpot(roomId, empId) {
+  const r = ROOMS[roomId];
+  const idx = Object.keys(EMPLOYEES).indexOf(empId);
+  const fx = r.x + r.w * (0.22 + 0.18 * (idx % 3));
+  const fy = r.y + r.h * (0.38 + 0.2 * Math.floor(idx / 3) % 2);
+  return { x: fx, y: fy };
+}
+function place(empId, roomId, instant) {
+  const s = state[empId]; const p = roomSpot(roomId, empId);
+  if (!instant && s.room !== roomId) {
+    s.el.classList.add('walking');
+    setTimeout(() => s.el.classList.remove('walking'), 1400);
+  }
+  s.room = roomId;
+  s.el.style.left = `calc(${p.x}% - 32px)`;
+  s.el.style.top = p.y + '%';
+}
+function work(empId, text, roomId) {
+  const s = state[empId];
+  place(empId, roomId || EMPLOYEES[empId].desk);
+  s.lastActive = Date.now();
+  s.el.classList.add('working');
+  document.querySelectorAll('.room.active').forEach(r => r.classList.remove('active'));
+  const room = document.getElementById('room-' + (roomId || EMPLOYEES[empId].desk));
+  if (room) room.classList.add('active');
+  if (text) {
+    const b = s.el.querySelector('.bubble');
+    b.textContent = text.length > 90 ? text.slice(0, 90) + '…' : text;
+    b.classList.add('show');
+    clearTimeout(s.bubbleTimer);
+    s.bubbleTimer = setTimeout(() => b.classList.remove('show'), 6000);
+  }
+}
+setInterval(() => { // drift idle workers to the break room
+  const now = Date.now();
+  for (const [id, s] of Object.entries(state)) {
+    if (now - s.lastActive > 50000 && s.room !== 'breakroom') { s.el.classList.remove('working'); place(id, 'breakroom'); }
+    else if (now - s.lastActive > 12000) s.el.classList.remove('working');
+  }
+}, 4000);
+
+// ---------- ticker + stages + gate ----------
+const tickerEl = document.getElementById('ticker');
+function tick(who, text, t) {
+  const line = document.createElement('div');
+  line.className = 'line';
+  const tm = new Date(t || Date.now()).toLocaleTimeString([], { hour12: false });
+  line.innerHTML = `<span class="tm">${tm}</span><span class="who">${who}</span> ${text.replace(/</g, '&lt;')}`;
+  tickerEl.prepend(line);
+  while (tickerEl.children.length > 8) tickerEl.lastChild.remove();
+}
+function setStage(i) { STAGES.forEach((_, k) => document.getElementById('stage-' + k).classList.toggle('on', k === i)); }
+let gateTimer = null;
+function gateRun() {
+  document.getElementById('verdict').textContent = 'running checks…';
+  CHECKS.forEach((c, i) => setTimeout(() => { const l = document.getElementById('light-' + c); l.className = 'light run'; }, i * 160));
+  clearTimeout(gateTimer);
+  gateTimer = setTimeout(() => gateResult(true), CHECKS.length * 160 + 1200); // optimistic default; a red event overrides
+}
+function gateResult(ok, failed) {
+  clearTimeout(gateTimer);
+  CHECKS.forEach(c => { document.getElementById('light-' + c).className = 'light ' + (ok || !failed?.includes(c) ? 'ok' : 'bad'); });
+  document.getElementById('verdict').textContent = ok ? 'GREEN — all checks passed' : 'RED — ' + (failed || []).join(', ');
+  document.getElementById('verdict').style.color = ok ? 'var(--green)' : 'var(--red)';
+}
+function party() {
+  const c = document.getElementById('confetti');
+  for (let i = 0; i < 26; i++) {
+    const s = document.createElement('span');
+    s.className = 'party'; s.textContent = ['🎉','🎊','✨','🥳'][i % 4];
+    s.style.left = Math.random() * 100 + '%'; s.style.animationDelay = (Math.random() * .8) + 's';
+    c.appendChild(s); setTimeout(() => s.remove(), 3500);
+  }
+}
+
+// ---------- event interpretation ----------
+function skillOwner(sk) {
+  if (/new-app|spec/.test(sk)) return ['rakan', 0];
+  if (/design|preview/.test(sk)) return ['layla', 1];
+  if (/build|goal/.test(sk)) return ['omar', 2];
+  if (/review/.test(sk)) return ['sara', 3];
+  if (/ship/.test(sk)) return ['nasser', 4];
+  return null;
+}
+function handle(ev) {
+  const s = ev.s || '';
+  const low = s.toLowerCase();
+  switch (ev.e) {
+    case 'SessionStart':
+      tick('Office', 'doors open — session started', ev.t); return;
+    case 'UserPromptSubmit': {
+      const m = low.match(/^\/([a-z-]+)/);
+      if (m) { const o = skillOwner(m[1]); if (o) { setStage(o[1]); work(o[0], '/' + m[1]); tick('Basim', 'assigned ' + s, ev.t); return; } }
+      work('rakan', null, 'ceo'); tick('Basim', s || 'gave instructions', ev.t); return;
+    }
+    case 'PostToolUse': case 'PreToolUse': {
+      if (ev.e === 'PreToolUse' && ev.tool !== 'Skill') return; // count each tool once
+      const tool = ev.tool || '';
+      if (tool === 'Skill') { const o = skillOwner(low); if (o) { setStage(o[1]); work(o[0], s, ev.t && null); tick(EMPLOYEES[o[0]].name.split(' ')[0], 'started ' + s, ev.t); } return; }
+      if (tool === 'Edit' || tool === 'Write' || tool === 'NotebookEdit') {
+        const f = s.replace(/\\/g, '/');
+        let who = 'omar';
+        if (/supabase\/migrations|\.sql$/.test(f)) who = 'huda';
+        else if (/design\//.test(f)) who = 'layla';
+        else if (/docs\/spec|decisions|integrations/i.test(f)) who = 'rakan';
+        else if (/\.github|eas\.json/.test(f)) who = 'nasser';
+        work(who, '✏️ ' + f.split('/').slice(-2).join('/'));
+        tick(EMPLOYEES[who].name.split(' ')[0], 'editing ' + f.split('/').slice(-2).join('/'), ev.t); return;
+      }
+      if (tool === 'Bash' || tool === 'PowerShell') {
+        if (/verify\.mjs/.test(low) && !/--/.test(low)) { work('omar', 'running the gate…', 'gate'); gateRun(); tick('Gate', 'verify.mjs running', ev.t); return; }
+        if (/jest|tsc|eslint|expo export/.test(low)) { work('omar', s, 'gate'); tick('Gate', s, ev.t); return; }
+        if (/git commit|git push/.test(low)) { work('nasser', s); tick('Nasser', s, ev.t); if (/push/.test(low)) party(); return; }
+        if (/collect-keys/.test(low)) { work('rakan', 'waiting for keys…', 'ceo'); tick('Office', '🔑 key form opened for Basim', ev.t); return; }
+        if (/supabase|migration/.test(low)) { work('huda', s); tick('Huda', s, ev.t); return; }
+        if (/expo start|tunnel/.test(low)) { work('layla', '📱 preview on the iPhone', ev.t && null); tick('Layla', 'Expo preview started — scan the QR', ev.t); return; }
+        tick('Shell', s, ev.t); return;
+      }
+      if (tool === 'Task' || tool === 'Agent') {
+        const who = /db|migration|sql/.test(low) ? 'huda' : /secur/.test(low) ? 'faisal' : 'sara';
+        work(who, '🤝 ' + s, who === 'sara' ? 'review' : undefined);
+        tick(EMPLOYEES[who].name.split(' ')[0], 'subagent: ' + s, ev.t); return;
+      }
+      if (tool === 'Read' || tool === 'Grep' || tool === 'Glob') return; // too chatty for the movie
+      return;
+    }
+    case 'SubagentStop':
+      tick('Office', 'subagent finished' + (s ? ': ' + s : ''), ev.t); return;
+    case 'Stop':
+      tick('Office', 'Claude finished the turn — waiting for Basim', ev.t); return;
+  }
+}
+
+// ---------- live polling / demo ----------
+const demo = new URLSearchParams(location.search).has('demo');
+document.getElementById('mode').textContent = demo ? 'DEMO' : 'LIVE';
+document.getElementById('mode').classList.toggle('demo', demo);
+setInterval(() => { document.getElementById('clock').textContent = new Date().toLocaleTimeString([], { hour12: false }); }, 1000);
+
+if (!demo) {
+  let since = Date.now() - 30 * 60 * 1000; // replay the last half hour on load
+  async function poll() {
+    try {
+      const r = await fetch('/events?since=' + since);
+      const j = await r.json();
+      document.getElementById('title').textContent = 'AI Office — ' + j.project;
+      for (const ev of j.events) { handle(ev); since = Math.max(since, ev.t); }
+    } catch { /* server gone — keep trying */ }
+  }
+  poll(); setInterval(poll, 1500);
+} else {
+  document.getElementById('title').textContent = 'AI Office — demo day';
+  const script = [
+    [0,    () => { tick('Office', 'doors open — session started'); }],
+    [1200, () => { setStage(0); work('rakan', '/new-app rafeeq-habits'); tick('Basim', 'assigned /new-app rafeeq-habits "Arabic-first habit tracker"'); }],
+    [4000, () => work('rakan', '✏️ docs/SPEC.md')],
+    [6500, () => { work('huda', '✏️ 0001_habits.sql — tables + RLS'); tick('Huda', 'writing the schema migration'); }],
+    [9000, () => { work('rakan', 'integrations table → Basim', 'ceo'); tick('Office', '🔑 integrations approved; key form opened for Basim'); }],
+    [12000,() => { setStage(1); work('layla', 'importing the Claude Design zip'); tick('Layla', 'design zip: 8 screens, tokens ✓'); }],
+    [15000,() => { work('layla', '📱 Expo preview — QR ready'); tick('Layla', 'Basim approves screens on his iPhone'); }],
+    [18000,() => { setStage(2); work('omar', '/build — wiring screens to Supabase'); tick('Basim', 'assigned /build'); }],
+    [21000,() => work('omar', '✏️ src/features/habits/api.ts')],
+    [23500,() => { work('omar', 'running the gate…', 'gate'); gateRun(); tick('Gate', 'verify.mjs running (12 checks)'); }],
+    [26800,() => { gateResult(false, ['tests']); tick('Gate', 'RED — 1 test failing'); }],
+    [29000,() => { work('omar', 'fixing the failing test'); tick('Omar', 'streak reset logic — off-by-one fixed'); }],
+    [32000,() => { work('omar', 'running the gate…', 'gate'); gateRun(); tick('Gate', 'verify.mjs running'); }],
+    [35500,() => { gateResult(true); tick('Gate', 'GREEN — 12/12 checks passed'); }],
+    [37500,() => { setStage(3); work('sara', 'fresh-context review of the diff', 'review'); tick('Sara', 'reviewing 14 files against the SPEC'); }],
+    [41000,() => { work('faisal', 'RLS + secrets + advisors scan'); tick('Faisal', 'security: 0 unresolved findings'); }],
+    [44000,() => { work('sara', '2 findings → build loop', 'review'); tick('Sara', '2 findings sent back to Omar'); }],
+    [46500,() => { work('omar', 'fixing review findings'); }],
+    [49500,() => { gateRun(); work('omar', 'gate again…', 'gate'); }],
+    [53000,() => { gateResult(true); tick('Gate', 'GREEN — 12/12'); }],
+    [55000,() => { setStage(4); work('nasser', 'git push → CI builds the IPA'); tick('Nasser', 'unsigned IPA building on GitHub Actions (~30 min)'); }],
+    [58000,() => { party(); tick('Office', '🎉 Build shipped — Sideloadly it to the iPhone!'); }],
+    [61000,() => { tick('Office', 'demo loops — refresh to replay'); }],
+  ];
+  for (const [t, fn] of script) setTimeout(fn, t + 400);
+  setTimeout(() => location.reload(), 66000);
+}
+</script>
+</body>
+</html>
