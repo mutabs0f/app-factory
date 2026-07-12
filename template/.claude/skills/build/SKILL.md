@@ -25,8 +25,19 @@ The evaluator (a fast model) checks the condition after every turn. You run `nod
 4. **Encode every multi-attempt fix**: whenever the loop needs more than one attempt to go green, append ONE line to `LESSONS.md` — failure signature → winning fix. Mechanical, not optional.
 5. **Do NOT weaken the gate to make it pass.** `verify.mjs` / `guard-bash.mjs` / `.claude/settings.json` are protected; a PreToolUse hook blocks edits to them. Fix the code, never the check.
 
+## Escalate up, don't spin (the executor/advisor pattern)
+You are the executor; the `advisor` subagent (Fable 5) is the thinker you call when stuck:
+- **Trigger:** the SAME check fails twice with the same signature, or a bug survives two
+  fix attempts, or you face an either-or where picking wrong is expensive to undo.
+- **Call it ONCE per stuck signature** with: the failing check's real output, the failure
+  signature, what you already tried, and the relevant file paths. Apply its plan in this
+  loop yourself — the advisor diagnoses, you edit.
+- **Never delegate routine building to subagents** — on a subscription, workers re-reading
+  context costs more than doing the work here. Escalate up rarely; execute down here always.
+- If the advisor's plan wins, the `LESSONS.md` line (rule 4) records its diagnosis as the fix.
+
 ## If the loop can't go green in 8 turns
-Stop honestly. Report the real failing-check output to Basim — never paper over it. A missing or failing result is a halt, not something to hide.
+Stop honestly. Report the real failing-check output to Basim — never paper over it. A missing or failing result is a halt, not something to hide. (If you never consulted the `advisor`, that's the first question Basim will ask — use it before you burn the turn budget.)
 
 ## UI changes
 For any screen change, also run the `verify-app` on-device pass (open the changed screen in Expo Go via `/preview`, exercise it, check the Metro console) before calling it done — `expo export` proves it bundles, not that it works.

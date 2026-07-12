@@ -477,6 +477,7 @@ function handle(ev) {
         tick('Shell', s, ev.t); return;
       }
       if (tool === 'Task' || tool === 'Agent') {
+        if (/advis|architect/.test(low)) { people.rakan.workAt('ceo', '🧠 consulting the Advisor…'); tick('Advisor', 'Fable 5 consulted: ' + s, ev.t); return; }
         const who = /db|migration|sql/.test(low) ? 'huda' : /secur/.test(low) ? 'faisal' : 'sara';
         people[who].workAt(EMPLOYEES[who].desk, '🤝 ' + s);
         tick(EMPLOYEES[who].name, 'subagent: ' + s, ev.t);
