@@ -1,4 +1,5 @@
 {
+  "model": "claude-opus-4-8",
   "enabledPlugins": {
     "expo@claude-plugins-official": true
   },
