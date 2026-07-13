@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
 <title>AI Office 3D — the show</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🏢</text></svg>">
 <style>
@@ -63,6 +63,23 @@
   .party { position:absolute; font-size:1.2rem; animation:fall 2.6s linear forwards; }
   @keyframes fall { from { transform:translateY(-40px) rotate(0); opacity:1; } to { transform:translateY(105vh) rotate(720deg); opacity:.6; } }
   #hint { position:fixed; right:22px; top:52px; z-index:40; font-size:.64rem; color:#56607a; }
+  #c3d { touch-action:none; }
+  #followBtn { display:none; position:fixed; right:12px; bottom:118px; z-index:46; font-size:.7rem; padding:7px 12px;
+    border-radius:20px; border:1px solid #2c3650; background:#101521d9; color:var(--dim); }
+  #followBtn.on { background:var(--accent); color:#fff; border-color:var(--accent); }
+
+  /* ---------- iPhone / small screens: broadcast mode ---------- */
+  @media (max-width: 740px) {
+    header { padding:calc(6px + env(safe-area-inset-top)) 12px 6px; gap:8px; flex-wrap:wrap; }
+    header h1 { font-size:.85rem; }
+    .stages { margin-left:0; width:100%; overflow-x:auto; padding-bottom:2px; }
+    #clock, #hint { display:none; }
+    #verdictHud { left:12px; right:auto; bottom:calc(96px + env(safe-area-inset-bottom)); padding:7px 10px; min-width:0; font-size:.68rem; }
+    #verdictHud .t { font-size:.54rem; }
+    #ticker { height:calc(88px + env(safe-area-inset-bottom)); padding:6px 12px calc(6px + env(safe-area-inset-bottom)); font-size:.68rem; }
+    #confessional { left:12px; right:12px; width:auto; height:180px; bottom:calc(100px + env(safe-area-inset-bottom)); }
+    #followBtn { display:block; }
+  }
 </style>
 </head>
 <body>
@@ -76,6 +93,7 @@
   <span id="clock"></span>
 </header>
 <div id="hint">drag to orbit · wheel to zoom</div>
+<button id="followBtn" class="on">🎥 following</button>
 <div id="verdictHud"><div class="t">THE GATE · verify.mjs</div><div class="v" id="verdict">no run yet</div></div>
 <div id="confessional">
   <div class="recdot">● REC</div>
@@ -129,8 +147,9 @@ const QUOTES = {
 
 // ================= three.js scene =================
 const canvas = document.getElementById('c3d');
+const isMobile = matchMedia('(max-width: 740px)').matches || navigator.maxTouchPoints > 1;
 const renderer = new THREE.WebGLRenderer({ canvas, antialias:true });
-renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setPixelRatio(Math.min(devicePixelRatio, isMobile ? 1.5 : 2));
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -141,21 +160,40 @@ scene.fog = new THREE.Fog(0x070a12, 160, 320);
 
 const camera = new THREE.PerspectiveCamera(38, 1, 0.1, 600);
 const camState = { azimuth: Math.PI * 0.22, dist: 132, height: 82, targetX: 50, targetZ: 47, zoomK: 1 };
+// Director cam: on the phone the camera IS the broadcast — it follows whoever is working.
+let follow = isMobile || new URLSearchParams(location.search).has('follow');
+let followActor = null, manualUntil = 0;
+const camCur = { targetX: 50, targetZ: 47, zoomK: 1 };
+function updateCam(dt, now) {
+  let des;
+  if (zoomHold && now < zoomHold) des = camState;                                   // crash zoom wins
+  else if (follow && followActor && Date.now() > manualUntil)
+    des = { targetX: followActor.x, targetZ: followActor.z, zoomK: isMobile ? 0.52 : 0.62 };
+  else des = { targetX: 50, targetZ: 47, zoomK: camState.zoomK };
+  const k = 1 - Math.exp(-dt * 2.2);                                               // smooth dolly, no cuts
+  camCur.targetX += (des.targetX - camCur.targetX) * k;
+  camCur.targetZ += (des.targetZ - camCur.targetZ) * k;
+  camCur.zoomK += (des.zoomK - camCur.zoomK) * k;
+}
 function applyCamera(t) {
   const drift = Math.sin(t * 0.00012) * 0.05; // documentary slow drift
   const az = camState.azimuth + drift;
-  const d = camState.dist * camState.zoomK;
-  camera.position.set(camState.targetX + Math.sin(az) * d, camState.height * camState.zoomK, camState.targetZ + Math.cos(az) * d);
-  camera.lookAt(camState.targetX, 2, camState.targetZ);
+  const d = camState.dist * camCur.zoomK;
+  camera.position.set(camCur.targetX + Math.sin(az) * d, camState.height * camCur.zoomK, camCur.targetZ + Math.cos(az) * d);
+  camera.lookAt(camCur.targetX, 2, camCur.targetZ);
 }
+const followBtn = document.getElementById('followBtn');
+function paintFollowBtn() { followBtn.classList.toggle('on', follow); followBtn.textContent = follow ? '🎥 following' : '🎥 follow off'; }
+followBtn.addEventListener('click', () => { follow = !follow; manualUntil = 0; paintFollowBtn(); });
+paintFollowBtn();
 function resize() { const w = innerWidth, h = innerHeight; renderer.setSize(w, h); camera.aspect = w / h; camera.updateProjectionMatrix(); }
 addEventListener('resize', resize); resize();
 // manual orbit: drag horizontally; wheel zoom
 let dragging = false, lastX = 0;
-canvas.addEventListener('pointerdown', e => { dragging = true; lastX = e.clientX; });
+canvas.addEventListener('pointerdown', e => { dragging = true; lastX = e.clientX; manualUntil = Date.now() + 12000; });
 addEventListener('pointerup', () => dragging = false);
 addEventListener('pointermove', e => { if (dragging) { camState.azimuth += (e.clientX - lastX) * 0.004; lastX = e.clientX; } });
-canvas.addEventListener('wheel', e => { camState.zoomK = Math.min(1.6, Math.max(0.45, camState.zoomK + e.deltaY * 0.0008)); }, { passive:true });
+canvas.addEventListener('wheel', e => { camState.zoomK = Math.min(1.6, Math.max(0.45, camState.zoomK + e.deltaY * 0.0008)); manualUntil = Date.now() + 12000; }, { passive:true });
 
 // lights
 scene.add(new THREE.AmbientLight(0x46587e, 0.85));
@@ -163,7 +201,7 @@ scene.add(new THREE.HemisphereLight(0x2c3a5c, 0x0e1016, 0.75));
 const moon = new THREE.DirectionalLight(0x9db4e8, 1.1);
 moon.position.set(-40, 90, -60);
 moon.castShadow = true;
-moon.shadow.mapSize.set(2048, 2048);
+moon.shadow.mapSize.set(isMobile ? 1024 : 2048, isMobile ? 1024 : 2048);
 moon.shadow.camera.left = -70; moon.shadow.camera.right = 70;
 moon.shadow.camera.top = 70; moon.shadow.camera.bottom = -70;
 moon.shadow.camera.far = 300;
@@ -443,6 +481,7 @@ class Actor {
   }
   workAt(roomId, text) {
     this.lastActive = Date.now();
+    followActor = this; // the director cam tracks whoever got the latest assignment
     if (text) this.say(text);
     this.walkTo(roomId, () => { this.working = true; this.lastActive = Date.now(); });
     // brighten the room briefly
@@ -625,6 +664,7 @@ function loop(now) {
   const dt = Math.min((now - last) / 1000, 1.0); last = now;
   for (const a of Object.values(actors)) a.tick(dt, now);
   if (zoomHold && now > zoomHold) { resetCam(); zoomHold = 0; }
+  updateCam(dt, now);
   applyCamera(now);
   renderer.render(scene, camera);
   requestAnimationFrame(loop);

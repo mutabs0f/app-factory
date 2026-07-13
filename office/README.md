@@ -43,6 +43,20 @@ build → red gate → fix → green gate → review → ship → confetti.
 3. Work in Claude Code inside the app repo as usual (restart the session once
    after installing so the hooks load). The office comes alive.
 
+## Watch from your iPhone (broadcast mode) 📱
+
+Start the server with `--lan` and open the printed iPhone URL in Safari (same Wi-Fi):
+
+```
+node office/serve.mjs C:\Users\Thinkpad\Agents\<your-app> 4180 --lan
+```
+
+On the phone, `/3d` runs in **director-cam mode**: the camera automatically follows
+whoever is working — walks with them to the Gate, holds on the drama, cuts back wide.
+A 🎥 button toggles following; dragging the screen takes manual control for 12 s.
+Add to Home Screen in Safari for a full-screen show. `--lan` exposes a read-only
+view to your Wi-Fi network only — omit it for PC-only viewing.
+
 ## How it works (and what it never does)
 
 - Claude Code hooks (`PostToolUse`, `UserPromptSubmit`, …) pipe each event to

@@ -10,10 +10,13 @@ import { createServer } from 'node:http';
 import { existsSync, readFileSync } from 'node:fs';
 import { join, resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { networkInterfaces } from 'node:os';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const repo = resolve(process.argv[2] || process.cwd());
-const port = Number(process.argv[3] || 4180);
+const lan = process.argv.includes('--lan'); // opt-in: expose on the local network (for the iPhone)
+const args = process.argv.slice(2).filter((a) => a !== '--lan');
+const repo = resolve(args[0] || process.cwd());
+const port = Number(args[1] || 4180);
 
 function projectName() {
   for (const f of ['app.json', 'package.json']) {
@@ -70,8 +73,13 @@ const server = createServer((req, res) => {
   res.end('not found');
 });
 
-server.listen(port, '127.0.0.1', () => {
+server.listen(port, lan ? '0.0.0.0' : '127.0.0.1', () => {
   console.log(`AI Office watching ${repo}`);
   console.log(`3D show   http://127.0.0.1:${port}/3d        (live)  ·  /3d?demo=1 (demo day)`);
   console.log(`2D floor  http://127.0.0.1:${port}/          (live)  ·  /?demo=1   (demo day)`);
+  if (lan) {
+    const ips = Object.values(networkInterfaces()).flat().filter((i) => i && i.family === 'IPv4' && !i.internal);
+    for (const ip of ips) console.log(`iPhone    http://${ip.address}:${port}/3d   (same Wi-Fi; director cam follows the action)`);
+    console.log(`--lan is ON: anyone on this Wi-Fi can view (read-only). Omit --lan for PC-only.`);
+  }
 });
