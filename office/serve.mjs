@@ -44,11 +44,20 @@ function readEvents(since) {
   return events;
 }
 
+const STATIC = {
+  '/': ['index.html', 'text/html; charset=utf-8'],
+  '/index.html': ['index.html', 'text/html; charset=utf-8'],
+  '/3d': ['office3d.html', 'text/html; charset=utf-8'],
+  '/office3d.html': ['office3d.html', 'text/html; charset=utf-8'],
+  '/vendor/three.module.min.js': ['vendor/three.module.min.js', 'text/javascript; charset=utf-8'],
+};
+
 const server = createServer((req, res) => {
   const u = new URL(req.url, 'http://127.0.0.1');
-  if (u.pathname === '/') {
-    res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
-    res.end(readFileSync(join(HERE, 'index.html')));
+  const hit = STATIC[u.pathname];
+  if (hit) {
+    res.writeHead(200, { 'content-type': hit[1] });
+    res.end(readFileSync(join(HERE, hit[0])));
     return;
   }
   if (u.pathname === '/events') {
@@ -63,6 +72,6 @@ const server = createServer((req, res) => {
 
 server.listen(port, '127.0.0.1', () => {
   console.log(`AI Office watching ${repo}`);
-  console.log(`Open  http://127.0.0.1:${port}/        (live)`);
-  console.log(`Or    http://127.0.0.1:${port}/?demo=1  (demo mode, fake day at the office)`);
+  console.log(`3D show   http://127.0.0.1:${port}/3d        (live)  ·  /3d?demo=1 (demo day)`);
+  console.log(`2D floor  http://127.0.0.1:${port}/          (live)  ·  /?demo=1   (demo day)`);
 });

@@ -1,0 +1,683 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI Office 3D — the show</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🏢</text></svg>">
+<style>
+  :root { --ink:#e6ebf5; --dim:#8b96ad; --accent:#4f8cff; --green:#2ecc71; --red:#e74c3c; --amber:#f1c40f; }
+  * { box-sizing:border-box; margin:0; }
+  body { background:#070a10; color:var(--ink); font-family:'Segoe UI',system-ui,sans-serif; height:100vh; overflow:hidden; }
+  #c3d { position:fixed; inset:0; display:block; }
+
+  header { position:fixed; top:0; left:0; right:0; display:flex; align-items:center; gap:14px; padding:10px 18px;
+    background:linear-gradient(180deg,#070a10ee,#070a1000); z-index:40; }
+  header h1 { font-size:1.02rem; font-weight:600; }
+  .badge { font-size:.7rem; padding:3px 9px; border-radius:20px; background:var(--accent); color:#fff; letter-spacing:.08em; }
+  .badge.demo { background:var(--amber); color:#222; }
+  .rec { font-size:.66rem; color:#ff5b5b; letter-spacing:.14em; animation:blink 1.1s infinite alternate; }
+  @keyframes blink { to { opacity:.3; } }
+  .stages { display:flex; gap:6px; margin-left:auto; }
+  .stage { font-size:.68rem; padding:3px 9px; border-radius:6px; background:#1d2433cc; color:var(--dim); border:1px solid #2c3650; }
+  .stage.on { background:var(--accent); color:#fff; border-color:var(--accent); box-shadow:0 0 12px #4f8cff66; }
+  #clock { font-variant-numeric:tabular-nums; color:var(--dim); font-size:.8rem; }
+
+  #ticker { position:fixed; left:0; right:0; bottom:0; padding:8px 18px 10px; height:104px; overflow:hidden;
+    background:linear-gradient(0deg,#070a10f2 60%,#070a1000); font-size:.74rem; z-index:40; }
+  #ticker .line { color:var(--dim); padding:1.5px 0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  #ticker .line:first-child { color:var(--ink); }
+  #ticker .line .who { color:var(--accent); font-weight:600; }
+  #ticker .line .tm { color:#566; margin-right:8px; font-variant-numeric:tabular-nums; }
+
+  /* confessional talking head (kept 2D — it's a camera cutaway) */
+  #confessional { position:fixed; right:22px; bottom:126px; width:320px; height:200px; z-index:45;
+    border-radius:12px; overflow:hidden; border:3px solid #0a0c11; box-shadow:0 12px 40px #000c;
+    background:linear-gradient(160deg,#2a3143,#1c2230 55%,#171c28); display:none; }
+  #confessional.show { display:block; animation:cfadein .25s; }
+  @keyframes cfadein { from { opacity:0; transform:scale(.96); } }
+  #confessional .bookshelf { position:absolute; top:14px; left:16px; font-size:1.1rem; opacity:.45; letter-spacing:6px; }
+  #cf-talent { position:absolute; left:50%; bottom:30px; transform:translateX(-50%) scale(2.5); transform-origin:bottom center; }
+  #cf-talent .person { position:relative; }
+  #confessional .lower3 { position:absolute; left:0; right:0; bottom:0; background:linear-gradient(90deg,#101521f2,#101521cc 70%,transparent); padding:6px 12px; }
+  #confessional .lower3 .who { font-size:.72rem; font-weight:700; }
+  #confessional .lower3 .role { font-size:.6rem; color:var(--dim); }
+  #confessional .quote { position:absolute; top:12px; right:12px; left:120px; font-size:.72rem; font-style:italic; color:#f2f5fb; text-shadow:0 1px 3px #000; }
+  #confessional .recdot { position:absolute; top:8px; left:10px; font-size:.58rem; color:#ff5b5b; letter-spacing:.12em; animation:blink 1s infinite alternate; }
+  /* mini CSS person for the confessional cutaway */
+  .person { width:34px; }
+  .person .head { width:18px; height:18px; border-radius:50%; margin:0 auto; position:relative; z-index:2; }
+  .person .hair { position:absolute; top:-3px; left:-1px; right:-1px; height:11px; border-radius:10px 10px 3px 3px; }
+  .person .hijab { position:absolute; inset:-3px -2px -6px -2px; border-radius:50% 50% 42% 42%; z-index:-1; }
+  .person .eye { position:absolute; top:7px; width:2.5px; height:3.5px; background:#222; border-radius:50%; }
+  .person .eye.l { left:4px; } .person .eye.r { right:4px; }
+  .person .torso { width:24px; height:20px; margin:-3px auto 0; border-radius:8px 8px 5px 5px; position:relative; }
+  .person .badge2 { position:absolute; right:1px; bottom:2px; font-size:9px; }
+
+  #verdictHud { position:fixed; left:22px; bottom:126px; z-index:44; background:#101521d9; border:1px solid #2c3650;
+    border-radius:10px; padding:10px 14px; font-size:.78rem; min-width:210px; }
+  #verdictHud .t { color:var(--dim); font-size:.62rem; letter-spacing:.12em; margin-bottom:6px; }
+  #verdictHud .v { font-weight:600; }
+
+  #confetti { position:fixed; inset:0; pointer-events:none; z-index:50; }
+  .party { position:absolute; font-size:1.2rem; animation:fall 2.6s linear forwards; }
+  @keyframes fall { from { transform:translateY(-40px) rotate(0); opacity:1; } to { transform:translateY(105vh) rotate(720deg); opacity:.6; } }
+  #hint { position:fixed; right:22px; top:52px; z-index:40; font-size:.64rem; color:#56607a; }
+</style>
+</head>
+<body>
+<canvas id="c3d"></canvas>
+<header>
+  <span style="font-size:1.2rem">🏢</span>
+  <h1 id="title">AI Office</h1>
+  <span class="badge" id="mode">LIVE</span>
+  <span class="rec">● REC</span>
+  <div class="stages" id="stages"></div>
+  <span id="clock"></span>
+</header>
+<div id="hint">drag to orbit · wheel to zoom</div>
+<div id="verdictHud"><div class="t">THE GATE · verify.mjs</div><div class="v" id="verdict">no run yet</div></div>
+<div id="confessional">
+  <div class="recdot">● REC</div>
+  <div class="bookshelf">📚🏆🪴</div>
+  <div class="quote" id="cf-quote"></div>
+  <div id="cf-talent"></div>
+  <div class="lower3"><div class="who" id="cf-who"></div><div class="role" id="cf-role"></div></div>
+</div>
+<div id="ticker"></div>
+<div id="confetti"></div>
+
+<script type="module">
+import * as THREE from './vendor/three.module.min.js';
+
+// ================= shared data (kept in sync with index.html) =================
+const EMPLOYEES = {
+  rakan:  { name:'Rakan',  role:'Spec Writer',      desk:'spec',     skin:0xe8b98a, hair:0x2b2118, shirt:0xe9edf5, badge:'📋', css:{skin:'#e8b98a',hair:'#2b2118',shirt:'#e9edf5'} },
+  layla:  { name:'Layla',  role:'Product Designer', desk:'design',   skin:0xf0c8a0, hair:0x3d2c1e, shirt:0x8e6fd8, badge:'🎨', longhair:true, css:{skin:'#f0c8a0',hair:'#3d2c1e',shirt:'#8e6fd8'} },
+  omar:   { name:'Omar',   role:'Builder',          desk:'build',    skin:0xd9a06b, hair:0x1d1712, shirt:0x3f6fd8, badge:'💻', css:{skin:'#d9a06b',hair:'#1d1712',shirt:'#3f6fd8'} },
+  sara:   { name:'Sara',   role:'Code Reviewer',    desk:'review',   skin:0xeec39a, hijab:0x2aa8a0, shirt:0x1f8f88, badge:'🔍', css:{skin:'#eec39a',hijab:'#2aa8a0',shirt:'#1f8f88'} },
+  huda:   { name:'Huda',   role:'Database Guard',   desk:'db',       skin:0xe2b184, hijab:0xc86a8a, shirt:0xa8496c, badge:'🗄️', css:{skin:'#e2b184',hijab:'#c86a8a',shirt:'#a8496c'} },
+  faisal: { name:'Faisal', role:'Security',         desk:'security', skin:0xc98f5e, hair:0x151210, shirt:0x3d7a4e, badge:'🛡️', css:{skin:'#c98f5e',hair:'#151210',shirt:'#3d7a4e'} },
+  nasser: { name:'Nasser', role:'Shipping',         desk:'ship',     skin:0xe5ae76, hair:0x241a12, shirt:0xe08c3a, badge:'🚀', css:{skin:'#e5ae76',hair:'#241a12',shirt:'#e08c3a'} },
+};
+const ROOMS = {
+  spec:     { label:'SPEC OFFICE',   x:2,  z:4,  w:20, d:26, rug:0x2a3346 },
+  design:   { label:'DESIGN STUDIO', x:2,  z:36, w:20, d:26, rug:0x322a46 },
+  db:       { label:'DATABASE',      x:2,  z:68, w:20, d:27, rug:0x40283a },
+  build:    { label:'BUILD BAY',     x:26, z:26, w:27, d:42, rug:0x263246 },
+  gate:     { label:'THE GATE',      x:26, z:74, w:27, d:21, rug:0x1e2836 },
+  review:   { label:'REVIEW ROOM',   x:57, z:4,  w:19, d:30, rug:0x233c3a },
+  security: { label:'SECURITY',      x:57, z:40, w:19, d:26, rug:0x27392b },
+  ship:     { label:'SHIP DOCK',     x:80, z:40, w:18, d:26, rug:0x40332a },
+  breakroom:{ label:'BREAK ROOM',    x:57, z:72, w:41, d:23, rug:0x33302a },
+  ceo:      { label:"BASIM'S OFFICE",x:80, z:4,  w:18, d:30, rug:0x3a3426 },
+};
+const CHECKS = ['types','lint','tests','bundle','migrate','rls','grants','definer','fresh','secrets','decisions','env'];
+const STAGES = ['S1 Spec','S2 Design','S3 Build','S4 Review','S5 Ship'];
+const HALL_X = 24, HALL_Z = 71.5;
+const QUOTES = {
+  gateRed:[['omar',"The Gate said no. The Gate is… very honest. I respect it. I don't LIKE it."],['omar',"Is it broken? Yes. Am I worried? …Next question."],['huda',"It's never the database. Okay, once it was the database."]],
+  gateGreen:[['omar',"Twelve green lights. I'm not saying I'm a genius. I'm just not stopping anyone from saying it."],['faisal',"All green. I checked twice. Trust is good; checking twice is better."]],
+  review:[['sara',"I found two issues. Omar called them 'features'. They are not features."],['sara',"Fresh eyes. That's the whole job. Omar's eyes have… history with this code."]],
+  ship:[['nasser',"I shipped it. To an iPhone. In Riyadh. Through a robot in the cloud. Normal Tuesday."],['nasser',"Some people ship packages. I ship dreams. Also IPA files."]],
+  spec:[['rakan',"The spec is ONE page. A big company writes forty pages. Nobody reads forty pages."],['rakan',"Basim gives me one sentence. I give him an app. That's the exchange rate."]],
+  design:[['layla',"He approved all eight screens from his phone. In the majlis. That's the future of design review."]],
+  keys:[['rakan',"We never let Basim touch a .env file. We are not monsters."]],
+  security:[['faisal',"Zero findings today. Honestly? A little disappointed."]],
+  idle:[['huda',"People think Row Level Security is boring. Those people have public data."],['nasser',"The 7-day signing limit? It's like watering a plant. A very complicated plant."],['layla',"RTL is not 'flip it and hope'. It's a lifestyle."],['omar',"The coffee here is virtual. My commitment is real."],['sara',"Do I enjoy rejecting code? …No comment."]],
+};
+
+// ================= three.js scene =================
+const canvas = document.getElementById('c3d');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias:true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.35;
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x070a12);
+scene.fog = new THREE.Fog(0x070a12, 160, 320);
+
+const camera = new THREE.PerspectiveCamera(38, 1, 0.1, 600);
+const camState = { azimuth: Math.PI * 0.22, dist: 132, height: 82, targetX: 50, targetZ: 47, zoomK: 1 };
+function applyCamera(t) {
+  const drift = Math.sin(t * 0.00012) * 0.05; // documentary slow drift
+  const az = camState.azimuth + drift;
+  const d = camState.dist * camState.zoomK;
+  camera.position.set(camState.targetX + Math.sin(az) * d, camState.height * camState.zoomK, camState.targetZ + Math.cos(az) * d);
+  camera.lookAt(camState.targetX, 2, camState.targetZ);
+}
+function resize() { const w = innerWidth, h = innerHeight; renderer.setSize(w, h); camera.aspect = w / h; camera.updateProjectionMatrix(); }
+addEventListener('resize', resize); resize();
+// manual orbit: drag horizontally; wheel zoom
+let dragging = false, lastX = 0;
+canvas.addEventListener('pointerdown', e => { dragging = true; lastX = e.clientX; });
+addEventListener('pointerup', () => dragging = false);
+addEventListener('pointermove', e => { if (dragging) { camState.azimuth += (e.clientX - lastX) * 0.004; lastX = e.clientX; } });
+canvas.addEventListener('wheel', e => { camState.zoomK = Math.min(1.6, Math.max(0.45, camState.zoomK + e.deltaY * 0.0008)); }, { passive:true });
+
+// lights
+scene.add(new THREE.AmbientLight(0x46587e, 0.85));
+scene.add(new THREE.HemisphereLight(0x2c3a5c, 0x0e1016, 0.75));
+const moon = new THREE.DirectionalLight(0x9db4e8, 1.1);
+moon.position.set(-40, 90, -60);
+moon.castShadow = true;
+moon.shadow.mapSize.set(2048, 2048);
+moon.shadow.camera.left = -70; moon.shadow.camera.right = 70;
+moon.shadow.camera.top = 70; moon.shadow.camera.bottom = -70;
+moon.shadow.camera.far = 300;
+const moonTargetObj = new THREE.Object3D(); moonTargetObj.position.set(50, 0, 45); scene.add(moonTargetObj);
+moon.target = moonTargetObj;
+scene.add(moon);
+
+// ground + building slab
+const mat = (c, r = 0.9, m = 0) => new THREE.MeshStandardMaterial({ color:c, roughness:r, metalness:m });
+const ground = new THREE.Mesh(new THREE.PlaneGeometry(600, 600), mat(0x05070c, 1));
+ground.rotation.x = -Math.PI / 2; ground.position.set(50, -0.31, 45); ground.receiveShadow = true; scene.add(ground);
+const slab = new THREE.Mesh(new THREE.BoxGeometry(104, 0.6, 99), mat(0x141a28, 0.95));
+slab.position.set(50, -0.3, 47.5); slab.receiveShadow = true; scene.add(slab);
+// wood corridors: whole floor gets warm planks, rugs go on top per room
+const floorTex = (() => {
+  const cv = document.createElement('canvas'); cv.width = cv.height = 256;
+  const g = cv.getContext('2d');
+  g.fillStyle = '#20222c'; g.fillRect(0, 0, 256, 256);
+  for (let i = 0; i < 16; i++) {
+    g.fillStyle = `hsl(226 18% ${11 + Math.random() * 4}%)`;
+    g.fillRect(0, i * 16, 256, 15);
+  }
+  const t = new THREE.CanvasTexture(cv); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(10, 10); return t;
+})();
+const floor = new THREE.Mesh(new THREE.PlaneGeometry(100, 95), new THREE.MeshStandardMaterial({ map:floorTex, roughness:0.85 }));
+floor.rotation.x = -Math.PI / 2; floor.position.set(50, 0.01, 47.5); floor.receiveShadow = true; scene.add(floor);
+
+// city skyline backdrop (emissive windows)
+for (let i = 0; i < 26; i++) {
+  const w = 6 + Math.random() * 10, h = 14 + Math.random() * 42, d = 6 + Math.random() * 8;
+  const b = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat(0x0a0e18, 1));
+  b.position.set(-60 + i * 9 + Math.random() * 4, h / 2 - 0.3, -70 - Math.random() * 60);
+  scene.add(b);
+  const wins = new THREE.Mesh(new THREE.PlaneGeometry(w * 0.86, h * 0.86),
+    new THREE.MeshBasicMaterial({ color:0x2a3c66, transparent:true, opacity:0.55,
+      map:(() => { const cv = document.createElement('canvas'); cv.width = 32; cv.height = 64; const g = cv.getContext('2d');
+        g.fillStyle = '#000'; g.fillRect(0, 0, 32, 64);
+        for (let y = 2; y < 62; y += 5) for (let x = 2; x < 30; x += 6)
+          if (Math.random() < 0.35) { g.fillStyle = ['#ffd27a', '#9db4e8', '#7ae8c8'][(Math.random() * 3) | 0]; g.fillRect(x, y, 3, 2); }
+        return new THREE.CanvasTexture(cv); })() }));
+  wins.position.set(b.position.x, b.position.y, b.position.z + d / 2 + 0.05);
+  scene.add(wins);
+}
+
+// text sprite helper
+function textSprite(text, { size = 30, pad = 12, bg = 'rgba(255,255,255,0.96)', fg = '#16202e', maxW = 460 } = {}) {
+  const cv = document.createElement('canvas'); const g = cv.getContext('2d');
+  g.font = `600 ${size}px Segoe UI, sans-serif`;
+  const tw = Math.min(maxW, g.measureText(text).width);
+  cv.width = tw + pad * 2; cv.height = size + pad * 2;
+  g.font = `600 ${size}px Segoe UI, sans-serif`;
+  if (bg) { g.fillStyle = bg; g.beginPath(); g.roundRect(0, 0, cv.width, cv.height, 14); g.fill(); }
+  g.fillStyle = fg; g.textBaseline = 'middle';
+  g.fillText(text, pad, cv.height / 2, maxW);
+  const tex = new THREE.CanvasTexture(cv);
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map:tex, depthTest:false }));
+  sp.scale.set(cv.width / 42, cv.height / 42, 1);
+  return sp;
+}
+
+// rooms: rugs, cutaway walls (north + west), furniture, per-room warm light
+const roomLights = {};
+function buildRoom(id, r) {
+  const cx = r.x + r.w / 2, cz = r.z + r.d / 2;
+  const rug = new THREE.Mesh(new THREE.BoxGeometry(r.w - 1.6, 0.14, r.d - 1.6), mat(r.rug, 0.98));
+  rug.position.set(cx, 0.08, cz); rug.receiveShadow = true; scene.add(rug);
+  const wallM = mat(0x2e3a58, 0.85); const H = 7, T = 0.7;
+  const wN = new THREE.Mesh(new THREE.BoxGeometry(r.w, H, T), wallM);   // far wall
+  wN.position.set(cx, H / 2, r.z + T / 2); wN.castShadow = wN.receiveShadow = true; scene.add(wN);
+  const wW = new THREE.Mesh(new THREE.BoxGeometry(T, H, r.d), wallM);   // left wall
+  wW.position.set(r.x + T / 2, H / 2, cz); wW.castShadow = wW.receiveShadow = true; scene.add(wW);
+  // baseboard glow strip
+  const strip = new THREE.Mesh(new THREE.BoxGeometry(r.w - 0.4, 0.18, 0.18), new THREE.MeshBasicMaterial({ color:0x3a4a70 }));
+  strip.position.set(cx, 0.35, r.z + T + 0.12); scene.add(strip);
+  // label on the far wall
+  const label = textSprite(r.label, { size:26, bg:'rgba(16,21,33,0.85)', fg:'#8b96ad' });
+  label.position.set(cx, H - 1.1, r.z + 1.4); label.scale.multiplyScalar(1.05); scene.add(label);
+  // warm ceiling light pool
+  const pl = new THREE.PointLight(0xffb46b, id === 'gate' ? 180 : 320, Math.max(r.w, r.d) * 1.9, 2);
+  pl.position.set(cx, 6.2, cz); scene.add(pl);
+  roomLights[id] = pl;
+  // lamp fixture
+  const lamp = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 1.1, 0.5, 12), new THREE.MeshBasicMaterial({ color:0xffd9a0 }));
+  lamp.position.set(cx, 6.6, cz); scene.add(lamp);
+}
+for (const [id, r] of Object.entries(ROOMS)) buildRoom(id, r);
+
+// furniture helpers
+function desk(x, z, rotY = 0, big = false) {
+  const gr = new THREE.Group();
+  const top = new THREE.Mesh(new THREE.BoxGeometry(big ? 7 : 5.6, 0.34, 2.6), mat(0x6b4a2f, 0.7));
+  top.position.y = 2.5; top.castShadow = top.receiveShadow = true; gr.add(top);
+  for (const [lx, lz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
+    const leg = new THREE.Mesh(new THREE.BoxGeometry(0.26, 2.5, 0.26), mat(0x3a2c1e, 0.8));
+    leg.position.set(lx * ((big ? 7 : 5.6) / 2 - 0.3), 1.25, lz * 1.0); leg.castShadow = true; gr.add(leg);
+  }
+  // monitor with glowing screen
+  const mstand = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.8, 0.3), mat(0x111521)); mstand.position.set(0, 3.05, -0.5); gr.add(mstand);
+  const mon = new THREE.Mesh(new THREE.BoxGeometry(2.6, 1.6, 0.16), mat(0x0c1018)); mon.position.set(0, 3.9, -0.5); mon.castShadow = true; gr.add(mon);
+  const screen = new THREE.Mesh(new THREE.PlaneGeometry(2.3, 1.3), new THREE.MeshBasicMaterial({ color:0x7ad8ff }));
+  screen.position.set(0, 3.9, -0.4); screen.name = 'screen'; gr.add(screen);
+  const glow = new THREE.PointLight(0x7ad8ff, 22, 9, 2); glow.position.set(0, 3.7, 0.6); gr.add(glow);
+  // chair
+  const seat = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.25, 1.5), mat(0x27314a)); seat.position.set(0, 1.5, 2.0); seat.castShadow = true; gr.add(seat);
+  const back = new THREE.Mesh(new THREE.BoxGeometry(1.5, 1.7, 0.22), mat(0x27314a)); back.position.set(0, 2.4, 2.7); back.castShadow = true; gr.add(back);
+  const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.3, 1.4, 8), mat(0x111521)); pole.position.set(0, 0.7, 2.0); gr.add(pole);
+  gr.position.set(x, 0, z); gr.rotation.y = rotY;
+  scene.add(gr); return gr;
+}
+function plant(x, z) {
+  const gr = new THREE.Group();
+  const pot = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.4, 0.8, 10), mat(0xa8542c, 0.9)); pot.position.y = 0.4; pot.castShadow = true; gr.add(pot);
+  for (let i = 0; i < 4; i++) {
+    const leaf = new THREE.Mesh(new THREE.ConeGeometry(0.55, 1.7, 7), mat(0x2f7a45, 0.8));
+    leaf.position.set(Math.sin(i * 2.1) * 0.3, 1.4 + (i % 2) * 0.4, Math.cos(i * 2.1) * 0.3);
+    leaf.castShadow = true; gr.add(leaf);
+  }
+  gr.position.set(x, 0, z); scene.add(gr);
+}
+function shelf(x, z, rotY = 0) {
+  const gr = new THREE.Group();
+  const body = new THREE.Mesh(new THREE.BoxGeometry(3.4, 4.4, 0.9), mat(0x4a3826, 0.85)); body.position.y = 2.2; body.castShadow = true; gr.add(body);
+  for (let s = 0; s < 3; s++) for (let b = 0; b < 5; b++) {
+    if (Math.random() < 0.25) continue;
+    const book = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.8, 0.5),
+      mat([0xc0563e, 0x3e7ac0, 0x64a05a, 0xc0a23e, 0x8e6fd8][(Math.random() * 5) | 0], 0.7));
+    book.position.set(-1.2 + b * 0.6, 1.0 + s * 1.2, 0.25); gr.add(book);
+  }
+  gr.position.set(x, 0, z); gr.rotation.y = rotY; scene.add(gr);
+}
+
+// place furniture
+desk(ROOMS.spec.x + 10, ROOMS.spec.z + 15);        shelf(ROOMS.spec.x + 3.4, ROOMS.spec.z + 6, Math.PI / 2); plant(ROOMS.spec.x + 17, ROOMS.spec.z + 5);
+desk(ROOMS.design.x + 10, ROOMS.design.z + 15);    plant(ROOMS.design.x + 17, ROOMS.design.z + 5);
+desk(ROOMS.db.x + 10, ROOMS.db.z + 16);
+// server racks in DB room
+for (let i = 0; i < 3; i++) {
+  const rack = new THREE.Mesh(new THREE.BoxGeometry(1.6, 4.6, 1.2), mat(0x131926, 0.6, 0.4));
+  rack.position.set(ROOMS.db.x + 4 + i * 2.4, 2.3, ROOMS.db.z + 4.5); rack.castShadow = true; scene.add(rack);
+  for (let y = 0; y < 6; y++) {
+    const led = new THREE.Mesh(new THREE.PlaneGeometry(0.16, 0.16), new THREE.MeshBasicMaterial({ color:Math.random() < 0.7 ? 0x2ecc71 : 0xf1c40f }));
+    led.position.set(rack.position.x - 0.5 + Math.random(), 0.8 + y * 0.7, ROOMS.db.z + 4.5 + 0.62); scene.add(led);
+  }
+}
+desk(ROOMS.build.x + 9, ROOMS.build.z + 14);  desk(ROOMS.build.x + 19, ROOMS.build.z + 26, Math.PI); plant(ROOMS.build.x + 23.5, ROOMS.build.z + 4.5);
+desk(ROOMS.review.x + 9.5, ROOMS.review.z + 16); shelf(ROOMS.review.x + 3.2, ROOMS.review.z + 7, Math.PI / 2);
+desk(ROOMS.security.x + 9.5, ROOMS.security.z + 14);
+desk(ROOMS.ship.x + 9, ROOMS.ship.z + 13);
+// ship dock crates
+for (let i = 0; i < 4; i++) {
+  const crate = new THREE.Mesh(new THREE.BoxGeometry(1.7, 1.7, 1.7), mat(0x8a6a3c, 0.9));
+  crate.position.set(ROOMS.ship.x + 3.4 + (i % 2) * 2, 0.85 + Math.floor(i / 2) * 1.75, ROOMS.ship.z + 20);
+  crate.castShadow = true; scene.add(crate);
+}
+desk(ROOMS.ceo.x + 9, ROOMS.ceo.z + 15, 0, true); plant(ROOMS.ceo.x + 15.5, ROOMS.ceo.z + 5);
+// crown on Basim's desk
+const crown = new THREE.Group();
+const band = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.55, 0.3, 12, 1, true), new THREE.MeshStandardMaterial({ color:0xffd24a, metalness:0.8, roughness:0.3, side:THREE.DoubleSide }));
+crown.add(band);
+for (let i = 0; i < 5; i++) { const spike = new THREE.Mesh(new THREE.ConeGeometry(0.13, 0.45, 6), band.material);
+  spike.position.set(Math.sin(i / 5 * Math.PI * 2) * 0.55, 0.35, Math.cos(i / 5 * Math.PI * 2) * 0.55); crown.add(spike); }
+crown.position.set(ROOMS.ceo.x + 11.5, 2.9, ROOMS.ceo.z + 15); scene.add(crown);
+// break room: coffee machine, cooler, sofa, table
+const cm = new THREE.Mesh(new THREE.BoxGeometry(1.6, 2.2, 1.2), mat(0x27212b, 0.6)); cm.position.set(ROOMS.breakroom.x + 3.5, 1.1, ROOMS.breakroom.z + 16); cm.castShadow = true; scene.add(cm);
+const cmLed = new THREE.Mesh(new THREE.PlaneGeometry(0.5, 0.14), new THREE.MeshBasicMaterial({ color:0xff5b5b })); cmLed.position.set(cm.position.x, 1.9, cm.position.z + 0.62); scene.add(cmLed);
+const cooler = new THREE.Group();
+const coolBody = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.55, 2.0, 12), mat(0xdfe6f2, 0.5)); coolBody.position.y = 1.0; coolBody.castShadow = true; cooler.add(coolBody);
+const bottle = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.42, 0.9, 12), new THREE.MeshStandardMaterial({ color:0x6db8ff, transparent:true, opacity:0.7, roughness:0.2 })); bottle.position.y = 2.4; cooler.add(bottle);
+cooler.position.set(ROOMS.breakroom.x + 13, 0, ROOMS.breakroom.z + 16); scene.add(cooler);
+const sofa = new THREE.Group();
+const sofaSeat = new THREE.Mesh(new THREE.BoxGeometry(6, 1.0, 2.2), mat(0x7a4a3a, 0.9)); sofaSeat.position.y = 0.8; sofaSeat.castShadow = true; sofa.add(sofaSeat);
+const sofaBack = new THREE.Mesh(new THREE.BoxGeometry(6, 1.6, 0.5), mat(0x6a3f31, 0.9)); sofaBack.position.set(0, 1.7, -0.9); sofa.add(sofaBack);
+sofa.position.set(ROOMS.breakroom.x + 32, 0, ROOMS.breakroom.z + 15); scene.add(sofa);
+const btable = new THREE.Mesh(new THREE.CylinderGeometry(1.5, 1.5, 0.2, 16), mat(0x6b4a2f, 0.7)); btable.position.set(ROOMS.breakroom.x + 22, 1.4, ROOMS.breakroom.z + 13); scene.add(btable);
+const btLeg = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.3, 1.4, 8), mat(0x3a2c1e)); btLeg.position.set(ROOMS.breakroom.x + 22, 0.7, ROOMS.breakroom.z + 13); scene.add(btLeg);
+plant(ROOMS.breakroom.x + 38.5, ROOMS.breakroom.z + 4);
+
+// THE GATE: light wall
+const gateLights = {};
+{
+  const r = ROOMS.gate;
+  const panel = new THREE.Mesh(new THREE.BoxGeometry(r.w - 4, 5.4, 0.5), mat(0x10141f, 0.6));
+  panel.position.set(r.x + r.w / 2, 3.4, r.z + 1.6); panel.castShadow = true; scene.add(panel);
+  CHECKS.forEach((c, i) => {
+    const col = i % 6, row = Math.floor(i / 6);
+    const lightMesh = new THREE.Mesh(new THREE.BoxGeometry(1.9, 0.55, 0.2),
+      new THREE.MeshBasicMaterial({ color:0x333c50 }));
+    lightMesh.position.set(r.x + 3.6 + col * 3.35, 4.6 - row * 1.4, r.z + 1.95);
+    scene.add(lightMesh);
+    const tag = textSprite(c, { size:20, bg:null, fg:'#8b96ad' });
+    tag.position.set(lightMesh.position.x, lightMesh.position.y - 0.62, lightMesh.position.z + 0.1);
+    tag.scale.multiplyScalar(0.5); scene.add(tag);
+    gateLights[c] = lightMesh;
+  });
+}
+
+// ================= 3D characters =================
+function makeCharacter(id, spec) {
+  const gr = new THREE.Group();
+  const shirtM = mat(spec.shirt, 0.75), skinM = mat(spec.skin, 0.65);
+  const legL = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.28, 1.3, 8), mat(0x232c40, 0.85));
+  const legR = legL.clone();
+  legL.position.set(-0.34, 0.65, 0); legR.position.set(0.34, 0.65, 0);
+  legL.geometry.translate(0, -0.65, 0); legL.position.y = 1.3;   // pivot at hip for swing
+  legR.geometry = legL.geometry; legR.position.y = 1.3;
+  legL.castShadow = legR.castShadow = true;
+  gr.add(legL, legR);
+  const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.72, 1.15, 6, 14), shirtM);
+  body.position.y = 2.35; body.castShadow = true; gr.add(body);
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.62, 20, 16), skinM);
+  head.position.y = 3.75; head.castShadow = true; gr.add(head);
+  if (spec.hijab) {
+    const hijab = new THREE.Mesh(new THREE.SphereGeometry(0.74, 20, 16, 0, Math.PI * 2, 0, Math.PI * 0.72), mat(spec.hijab, 0.8));
+    hijab.position.y = 3.82; hijab.castShadow = true; gr.add(hijab);
+    const wrap = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.66, 0.6, 12), mat(spec.hijab, 0.8));
+    wrap.position.y = 3.2; gr.add(wrap);
+  } else {
+    const hair = new THREE.Mesh(new THREE.SphereGeometry(0.66, 20, 16, 0, Math.PI * 2, 0, Math.PI * (spec.longhair ? 0.62 : 0.45)), mat(spec.hair, 0.9));
+    hair.position.y = 3.82; hair.rotation.x = -0.25; gr.add(hair);
+    if (spec.longhair) { const back = new THREE.Mesh(new THREE.CapsuleGeometry(0.3, 1.0, 4, 8), mat(spec.hair, 0.9)); back.position.set(0, 3.1, -0.42); gr.add(back); }
+  }
+  // eyes (front = +z)
+  for (const ex of [-0.22, 0.22]) {
+    const eye = new THREE.Mesh(new THREE.SphereGeometry(0.055, 8, 8), new THREE.MeshBasicMaterial({ color:0x1a1a22 }));
+    eye.position.set(ex, 3.8, 0.56); gr.add(eye);
+  }
+  // soft blob shadow (in addition to real shadows)
+  const blob = new THREE.Mesh(new THREE.CircleGeometry(0.95, 20), new THREE.MeshBasicMaterial({ color:0x000000, transparent:true, opacity:0.35 }));
+  blob.rotation.x = -Math.PI / 2; blob.position.y = 0.03; gr.add(blob);
+  // name tag
+  const tag = textSprite(`${spec.badge} ${spec.name}`, { size:26, bg:'rgba(16,21,33,0.82)', fg:'#e6ebf5' });
+  tag.position.y = 5.0; tag.scale.multiplyScalar(0.72); gr.add(tag);
+  // speech bubble (swapped on demand)
+  gr.userData = { legL, legR, body };
+  scene.add(gr);
+  return gr;
+}
+
+class Actor {
+  constructor(id, spec) {
+    this.id = id; this.spec = spec;
+    this.g = makeCharacter(id, spec);
+    const s = this.deskSpot('breakroom');
+    this.x = s.x; this.z = s.z; this.g.position.set(s.x, 0, s.z);
+    this.path = []; this.speed = 9; this.walkT = 0;
+    this.lastActive = Date.now(); this.busyUntil = 0; this.working = false;
+    this.bubble = null; this.bubbleTimer = 0;
+  }
+  deskSpot(roomId) {
+    const r = ROOMS[roomId];
+    const idx = Object.keys(EMPLOYEES).indexOf(this.id);
+    if (roomId === 'breakroom') return { x: r.x + r.w * (0.12 + 0.135 * idx), z: r.z + r.d * (0.45 + 0.18 * (idx % 2)) };
+    // stand behind the chair, facing the desk/monitor
+    return { x: r.x + r.w * (0.28 + 0.17 * (idx % 3)), z: r.z + r.d * (0.5 + 0.2 * (Math.floor(idx / 3) % 2)) };
+  }
+  route(tx, tz) {
+    const leftS = this.x < HALL_X, leftT = tx < HALL_X;
+    const pts = [];
+    if (leftS && leftT) pts.push({ x:HALL_X, z:this.z }, { x:HALL_X, z:tz }, { x:tx, z:tz });
+    else if (leftS) pts.push({ x:HALL_X, z:this.z }, { x:HALL_X, z:HALL_Z }, { x:tx, z:HALL_Z }, { x:tx, z:tz });
+    else if (leftT) pts.push({ x:this.x, z:HALL_Z }, { x:HALL_X, z:HALL_Z }, { x:HALL_X, z:tz }, { x:tx, z:tz });
+    else pts.push({ x:this.x, z:HALL_Z }, { x:tx, z:HALL_Z }, { x:tx, z:tz });
+    return pts.filter((p, i, a) => { const prev = i ? a[i - 1] : { x:this.x, z:this.z }; return Math.hypot(p.x - prev.x, p.z - prev.z) > 0.8; });
+  }
+  walkTo(target, done) {
+    const t = typeof target === 'string' ? this.deskSpot(target) : target;
+    this.path = this.route(t.x, t.z);
+    this.onArrive = done;
+    this.working = false;
+  }
+  say(text, ms = 5500) {
+    if (this.bubble) { this.g.remove(this.bubble); this.bubble.material.map.dispose(); this.bubble.material.dispose(); }
+    this.bubble = textSprite(text.length > 60 ? text.slice(0, 60) + '…' : text, { size:26 });
+    this.bubble.position.y = 6.0; this.bubble.scale.multiplyScalar(0.6);
+    this.g.add(this.bubble);
+    this.bubbleTimer = performance.now() + ms;
+  }
+  workAt(roomId, text) {
+    this.lastActive = Date.now();
+    if (text) this.say(text);
+    this.walkTo(roomId, () => { this.working = true; this.lastActive = Date.now(); });
+    // brighten the room briefly
+    for (const [id, pl] of Object.entries(roomLights)) pl.intensity = id === roomId ? 430 : 320;
+  }
+  tick(dt, now) {
+    const { legL, legR, body } = this.g.userData;
+    if (this.bubble && performance.now() > this.bubbleTimer) {
+      this.g.remove(this.bubble); this.bubble.material.map.dispose(); this.bubble.material.dispose(); this.bubble = null;
+    }
+    if (this.path.length) {
+      const t = this.path[0];
+      const dx = t.x - this.x, dz = t.z - this.z;
+      const dist = Math.hypot(dx, dz), step = this.speed * dt;
+      const ang = Math.atan2(dx, dz);
+      this.g.rotation.y += (ang - this.g.rotation.y + Math.PI * 3) % (Math.PI * 2) - Math.PI * ((((ang - this.g.rotation.y + Math.PI * 3) % (Math.PI * 2)) > Math.PI) ? 1 : 0); // shortest-turn-ish
+      this.g.rotation.y = ang;
+      if (dist <= step) { this.x = t.x; this.z = t.z; this.path.shift();
+        if (!this.path.length) { legL.rotation.x = legR.rotation.x = 0; if (this.onArrive) { const f = this.onArrive; this.onArrive = null; f(); } } }
+      else { this.x += dx / dist * step; this.z += dz / dist * step; }
+      this.walkT += dt * 9;
+      legL.rotation.x = Math.sin(this.walkT) * 0.65;
+      legR.rotation.x = -Math.sin(this.walkT) * 0.65;
+      body.position.y = 2.35 + Math.abs(Math.sin(this.walkT)) * 0.09;
+      this.g.position.set(this.x, 0, this.z);
+    } else if (this.working) {
+      body.position.y = 2.35 + Math.sin(now * 0.004) * 0.045; // typing bob
+    }
+  }
+}
+const actors = {};
+for (const [id, spec] of Object.entries(EMPLOYEES)) actors[id] = new Actor(id, spec);
+
+// idle life
+function coolerChat(a, b) {
+  a.walkTo({ x:ROOMS.breakroom.x + 12, z:ROOMS.breakroom.z + 14 }, () => a.say('💬', 6000));
+  b.walkTo({ x:ROOMS.breakroom.x + 14.4, z:ROOMS.breakroom.z + 14 }, () => b.say('😂', 6000));
+}
+const IDLE_BITS = [
+  (p) => p.walkTo({ x:ROOMS.breakroom.x + 4.6, z:ROOMS.breakroom.z + 14.4 }, () => p.say('☕', 3200)),
+  (p) => p.walkTo({ x:ROOMS.breakroom.x + 31, z:ROOMS.breakroom.z + 12.2 }, () => p.say('📱', 4000)),
+  (p) => p.say('🤔', 2200),
+  (p) => { const q = QUOTES.idle[(Math.random() * QUOTES.idle.length) | 0]; if (q[0] === p.id) confessional(p.id, q[1]); else p.say('🤔', 2000); },
+];
+setInterval(() => {
+  const now = Date.now();
+  const idle = Object.values(actors).filter(p => now - p.lastActive > 22000 && !p.path.length && now > p.busyUntil);
+  for (const p of Object.values(actors)) if (now - p.lastActive > 15000) p.working = false;
+  if (!idle.length || Math.random() < 0.35) return;
+  if (idle.length >= 2 && Math.random() < 0.4) { const [a, b] = idle.sort(() => Math.random() - 0.5); a.busyUntil = b.busyUntil = now + 16000; coolerChat(a, b); }
+  else { const p = idle[(Math.random() * idle.length) | 0]; p.busyUntil = now + 14000; IDLE_BITS[(Math.random() * IDLE_BITS.length) | 0](p); }
+}, 7000);
+
+// camera drama
+let zoomHold = 0;
+function zoomOn(actorId) {
+  const a = actors[actorId];
+  camState.targetX = a.x; camState.targetZ = a.z; camState.zoomK = 0.55; zoomHold = performance.now() + 2100;
+}
+function resetCam() { camState.targetX = 50; camState.targetZ = 47; camState.zoomK = 1; }
+
+// ================= HUD: stages, ticker, gate, confessional, confetti =================
+const stagesEl = document.getElementById('stages');
+STAGES.forEach((s, i) => { const c = document.createElement('span'); c.className = 'stage'; c.id = 'stage-' + i; c.textContent = s; stagesEl.appendChild(c); });
+function setStage(i) { STAGES.forEach((_, k) => document.getElementById('stage-' + k).classList.toggle('on', k === i)); }
+const tickerEl = document.getElementById('ticker');
+function tick(who, text, t) {
+  const line = document.createElement('div'); line.className = 'line';
+  const tm = new Date(t || Date.now()).toLocaleTimeString([], { hour12:false });
+  line.innerHTML = `<span class="tm">${tm}</span><span class="who">${who}</span> ${String(text).replace(/</g, '&lt;')}`;
+  tickerEl.prepend(line);
+  while (tickerEl.children.length > 7) tickerEl.lastChild.remove();
+}
+setInterval(() => { document.getElementById('clock').textContent = new Date().toLocaleTimeString([], { hour12:false }); }, 1000);
+
+let gateTimer = null;
+const LIGHT_COLORS = { idle:0x333c50, run:0xf1c40f, ok:0x2ecc71, bad:0xe74c3c };
+function setLight(c, state) { gateLights[c].material.color.setHex(LIGHT_COLORS[state]); }
+function gateRun(auto = true) {
+  document.getElementById('verdict').textContent = 'running checks…'; document.getElementById('verdict').style.color = 'var(--amber)';
+  CHECKS.forEach((c, i) => setTimeout(() => setLight(c, 'run'), i * 160));
+  clearTimeout(gateTimer);
+  if (auto) gateTimer = setTimeout(() => gateResult(true), CHECKS.length * 160 + 1200);
+}
+function gateResult(ok, failed) {
+  clearTimeout(gateTimer);
+  CHECKS.forEach(c => setLight(c, ok || !failed?.includes(c) ? 'ok' : 'bad'));
+  const v = document.getElementById('verdict');
+  v.textContent = ok ? 'GREEN — all checks passed' : 'RED — ' + (failed || []).join(', ');
+  v.style.color = ok ? 'var(--green)' : 'var(--red)';
+  if (!ok) { zoomOn('omar'); setTimeout(() => quoteFrom('gateRed'), 1200); }
+}
+function party() {
+  const c = document.getElementById('confetti');
+  for (let i = 0; i < 26; i++) { const s = document.createElement('span'); s.className = 'party';
+    s.textContent = ['🎉','🎊','✨','🥳'][i % 4]; s.style.left = Math.random() * 100 + '%';
+    s.style.animationDelay = (Math.random() * .8) + 's'; c.appendChild(s); setTimeout(() => s.remove(), 3500); }
+}
+function personCSS(spec) {
+  const headwear = spec.css.hijab ? `<div class="hijab" style="background:${spec.css.hijab}"></div>`
+    : `<div class="hair" style="background:${spec.css.hair}${spec.longhair ? ';height:16px;border-radius:10px 10px 8px 8px' : ''}"></div>`;
+  return `<div class="person"><div class="head" style="background:${spec.css.skin}">${headwear}<div class="eye l"></div><div class="eye r"></div></div>
+    <div class="torso" style="background:${spec.css.shirt}"><span class="badge2">${spec.badge}</span></div></div>`;
+}
+const cf = document.getElementById('confessional');
+let cfTimer = null, cfTypeTimer = null;
+function confessional(id, quote) {
+  const spec = EMPLOYEES[id];
+  document.getElementById('cf-talent').innerHTML = personCSS(spec);
+  document.getElementById('cf-who').textContent = spec.name;
+  document.getElementById('cf-role').textContent = spec.role + ' · AI Office';
+  const q = document.getElementById('cf-quote'); q.textContent = '';
+  cf.classList.add('show'); cf.style.display = 'block';
+  let i = 0; clearInterval(cfTypeTimer);
+  cfTypeTimer = setInterval(() => { q.textContent = '“' + quote.slice(0, ++i) + (i < quote.length ? '' : '”'); if (i >= quote.length) clearInterval(cfTypeTimer); }, 28);
+  clearTimeout(cfTimer);
+  cfTimer = setTimeout(() => { cf.classList.remove('show'); cf.style.display = 'none'; }, Math.max(5200, quote.length * 28 + 2400));
+}
+function quoteFrom(bank) { const q = QUOTES[bank][(Math.random() * QUOTES[bank].length) | 0]; confessional(q[0], q[1]); }
+
+// ================= event interpretation (same mapping as 2D) =================
+function skillOwner(sk) {
+  if (/new-app|spec/.test(sk)) return ['rakan', 0];
+  if (/design|preview/.test(sk)) return ['layla', 1];
+  if (/build|goal/.test(sk)) return ['omar', 2];
+  if (/review/.test(sk)) return ['sara', 3];
+  if (/ship/.test(sk)) return ['nasser', 4];
+  return null;
+}
+function handle(ev) {
+  const s = ev.s || ''; const low = s.toLowerCase();
+  switch (ev.e) {
+    case 'SessionStart': tick('Office', 'doors open — session started', ev.t); return;
+    case 'UserPromptSubmit': {
+      const m = low.match(/^\/([a-z-]+)/);
+      if (m) { const o = skillOwner(m[1]); if (o) { setStage(o[1]); actors[o[0]].workAt(EMPLOYEES[o[0]].desk, '/' + m[1]); zoomOn(o[0]); tick('Basim', 'assigned ' + s, ev.t); return; } }
+      actors.rakan.workAt('ceo', '📝 new instructions'); tick('Basim', s || 'gave instructions', ev.t); return;
+    }
+    case 'PostToolUse': case 'PreToolUse': {
+      if (ev.e === 'PreToolUse' && ev.tool !== 'Skill') return;
+      const tool = ev.tool || '';
+      if (tool === 'Skill') { const o = skillOwner(low); if (o) { setStage(o[1]); actors[o[0]].workAt(EMPLOYEES[o[0]].desk, s); tick(EMPLOYEES[o[0]].name, 'started ' + s, ev.t); } return; }
+      if (tool === 'Edit' || tool === 'Write' || tool === 'NotebookEdit') {
+        const f = s.replace(/\\/g, '/');
+        let who = 'omar';
+        if (/supabase\/migrations|\.sql$/.test(f)) who = 'huda';
+        else if (/design\//.test(f)) who = 'layla';
+        else if (/docs\/spec|decisions|integrations/i.test(f)) who = 'rakan';
+        else if (/\.github|eas\.json/.test(f)) who = 'nasser';
+        actors[who].workAt(EMPLOYEES[who].desk, '✏️ ' + f.split('/').slice(-2).join('/'));
+        tick(EMPLOYEES[who].name, 'editing ' + f.split('/').slice(-2).join('/'), ev.t); return;
+      }
+      if (tool === 'Bash' || tool === 'PowerShell') {
+        if (/verify\.mjs/.test(low) && !/--check/.test(low)) { actors.omar.workAt('gate', 'running the gate…'); gateRun(); tick('Gate', 'verify.mjs running', ev.t); return; }
+        if (/jest|tsc|eslint|expo export/.test(low)) { actors.omar.workAt('gate', s); tick('Gate', s, ev.t); return; }
+        if (/git commit|git push/.test(low)) { actors.nasser.workAt('ship', s); tick('Nasser', s, ev.t); if (/push/.test(low)) { party(); setTimeout(() => quoteFrom('ship'), 900); } return; }
+        if (/collect-keys/.test(low)) { actors.rakan.workAt('ceo', '🔑 waiting for keys…'); tick('Office', '🔑 key form opened for Basim', ev.t); setTimeout(() => quoteFrom('keys'), 800); return; }
+        if (/supabase|migration/.test(low)) { actors.huda.workAt('db', s); tick('Huda', s, ev.t); return; }
+        if (/expo start|tunnel/.test(low)) { actors.layla.workAt('design', '📱 preview on the iPhone'); tick('Layla', 'Expo preview — scan the QR', ev.t); return; }
+        tick('Shell', s, ev.t); return;
+      }
+      if (tool === 'Task' || tool === 'Agent') {
+        if (/advis|architect/.test(low)) { actors.rakan.workAt('ceo', '🧠 consulting the Advisor…'); tick('Advisor', 'Fable 5 consulted: ' + s, ev.t); return; }
+        const who = /db|migration|sql/.test(low) ? 'huda' : /secur/.test(low) ? 'faisal' : 'sara';
+        actors[who].workAt(EMPLOYEES[who].desk, '🤝 ' + s);
+        tick(EMPLOYEES[who].name, 'subagent: ' + s, ev.t);
+        if (who === 'sara') setTimeout(() => quoteFrom('review'), 1500);
+        return;
+      }
+      return;
+    }
+    case 'SubagentStop': tick('Office', 'subagent finished' + (s ? ': ' + s : ''), ev.t); return;
+    case 'Stop': tick('Office', 'Claude finished the turn — waiting for Basim', ev.t); return;
+  }
+}
+
+// ================= main loop =================
+let last = performance.now();
+function loop(now) {
+  const dt = Math.min((now - last) / 1000, 1.0); last = now;
+  for (const a of Object.values(actors)) a.tick(dt, now);
+  if (zoomHold && now > zoomHold) { resetCam(); zoomHold = 0; }
+  applyCamera(now);
+  renderer.render(scene, camera);
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+
+// ================= live polling / demo =================
+const demo = new URLSearchParams(location.search).has('demo');
+document.getElementById('mode').textContent = demo ? 'DEMO' : 'LIVE';
+document.getElementById('mode').classList.toggle('demo', demo);
+if (!demo) {
+  let since = Date.now() - 30 * 60 * 1000;
+  async function poll() {
+    try {
+      const r = await fetch('/events?since=' + since);
+      const j = await r.json();
+      document.getElementById('title').textContent = 'AI Office — ' + j.project;
+      for (const ev of j.events) { handle(ev); since = Math.max(since, ev.t); }
+    } catch { /* keep trying */ }
+  }
+  poll(); setInterval(poll, 1500);
+} else {
+  document.getElementById('title').textContent = 'AI Office — demo day';
+  const S = [
+    [500,   () => tick('Office', 'doors open — session started')],
+    [1500,  () => { setStage(0); actors.rakan.workAt('spec', '/new-app rafeeq-habits'); zoomOn('rakan'); tick('Basim', 'assigned /new-app rafeeq-habits "Arabic-first habit tracker"'); }],
+    [6000,  () => quoteFrom('spec')],
+    [9000,  () => { actors.huda.workAt('db', '✏️ 0001_habits.sql — RLS + grants'); tick('Huda', 'writing the schema migration'); }],
+    [13500, () => { actors.rakan.workAt('ceo', '🔑 integrations table → Basim'); tick('Office', '🔑 integrations approved; key form opened'); }],
+    [16500, () => quoteFrom('keys')],
+    [20000, () => { setStage(1); actors.layla.workAt('design', '📦 importing the Claude Design zip'); tick('Layla', 'design zip: 8 screens, tokens ✓'); }],
+    [24500, () => { actors.layla.say('📱 QR ready — Basim checks his iPhone'); tick('Layla', 'Basim approves screens on his iPhone'); }],
+    [27500, () => quoteFrom('design')],
+    [31000, () => { setStage(2); actors.omar.workAt('build', '/build — wiring screens to Supabase'); zoomOn('omar'); tick('Basim', 'assigned /build'); }],
+    [35000, () => actors.omar.workAt('build', '✏️ src/features/habits/api.ts')],
+    [38500, () => { actors.omar.workAt('gate', 'running the gate…'); gateRun(false); tick('Gate', 'verify.mjs running (12 checks)'); }],
+    [42500, () => { gateResult(false, ['tests']); tick('Gate', 'RED — 1 test failing'); }],
+    [47500, () => { actors.omar.workAt('build', 'fixing the failing test'); tick('Omar', 'streak reset logic — off-by-one fixed'); }],
+    [51500, () => { actors.omar.workAt('gate', 'gate, take two…'); gateRun(); tick('Gate', 'verify.mjs running'); }],
+    [55000, () => { gateResult(true); tick('Gate', 'GREEN — 12/12 checks passed'); setTimeout(() => quoteFrom('gateGreen'), 900); }],
+    [59500, () => { setStage(3); actors.sara.workAt('review', 'fresh-context review of the diff'); tick('Sara', 'reviewing 14 files against the SPEC'); }],
+    [63500, () => { actors.faisal.workAt('security', 'RLS + secrets + advisors scan'); tick('Faisal', 'security: 0 unresolved findings'); }],
+    [67000, () => { actors.sara.say('2 findings → back to Omar'); tick('Sara', '2 findings sent back to Omar'); setTimeout(() => quoteFrom('review'), 700); }],
+    [71500, () => actors.omar.workAt('build', 'fixing review findings')],
+    [75500, () => { actors.omar.workAt('gate', 'gate again…'); gateRun(); }],
+    [79000, () => { gateResult(true); tick('Gate', 'GREEN — 12/12'); }],
+    [82000, () => { setStage(4); actors.nasser.workAt('ship', 'git push → CI builds the IPA'); zoomOn('nasser'); tick('Nasser', 'unsigned IPA building on GitHub Actions (~30 min)'); }],
+    [86000, () => { party(); tick('Office', '🎉 Build shipped — Sideloadly it to the iPhone!'); quoteFrom('ship'); }],
+    [92000, () => tick('Office', 'demo loops — refresh to replay')],
+  ];
+  for (const [t, fn] of S) setTimeout(fn, t);
+  setTimeout(() => location.reload(), 99000);
+}
+</script>
+</body>
+</html>
