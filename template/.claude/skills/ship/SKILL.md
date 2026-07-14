@@ -35,3 +35,9 @@ Done is Basim using the **real app on his own phone** against the **real cloud b
 
 ## Encode fixes
 If shipping took more than one attempt (bad workflow secret, signing snag, wrong path), append one line to `LESSONS.md`: failure signature → winning fix.
+
+## After the ship — the lessons cadence (10 minutes, every app)
+The factory only compounds if each app makes the next one better. After human gate #2 passes:
+1. **Measure the run:** if the office hooks were installed, run `node scripts/run-metrics.mjs . --append` and note the headline (wall clock, edits, gate attempts) in the ship report. Numbers, not vibes — the next app should beat them.
+2. **Triage `LESSONS.md`:** for each lesson from THIS app, mark it `stable` (hit twice or clearly systemic) or leave it app-local. List the stable ones in the ship report as **"promote to template"** — Basim's factory session applies them to `app-factory/template` (an app session never edits the factory).
+3. **Delete stale lessons** that this run proved obsolete — a lessons file nobody prunes becomes noise nobody reads.
