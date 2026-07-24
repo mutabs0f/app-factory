@@ -7,14 +7,18 @@
 //         6 decisions resolved · 7 env complete · 8 db reset + RLS + definer + grants ·
 //         9 generated-types freshness
 //
-// Assumes the local Supabase stack is running (`supabase start`). If Docker/local
-// Supabase is unavailable, the DB checks fail honestly (never skipped green).
+// The DB checks run in one of TWO modes (scripts/lib/dbclient.mjs):
+//   local — the Docker stack (`supabase start`), replayed with `supabase db reset`
+//   cloud — a DEV project via the Supabase Management API; needs only
+//           $SUPABASE_ACCESS_TOKEN and a ref in .dev-branch. NO DOCKER REQUIRED.
+// Auto-selects local when Docker is up, else cloud. Force with --db=local|cloud.
+// If NEITHER is available the DB checks fail honestly — they are never skipped green.
 import { execSync } from 'node:child_process';
 import { createHash, createHmac, randomBytes } from 'node:crypto';
 import { existsSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
-import pg from 'pg';
+import { genTypesCmd, modeHint, openDb, pickMode, resetDb } from './lib/dbclient.mjs';
 
 const TEMPLATE = process.cwd();
 const DB_URL =
@@ -209,15 +213,29 @@ checkDecisionsResolved();
 // Red on a fresh app until `/new-app` runs collect-keys.mjs; green once .env is filled.
 { const r = tryRun('node scripts/collect-keys.mjs --check'); record('env complete', r.ok, r.ok ? '' : tail(r.out, 3)); }
 
-// 6 — full migration replay + RLS coverage
-const reset = tryRun('supabase db reset');
-record('db reset (migration replay)', reset.ok, reset.ok ? '' : tail(reset.out));
+// 8 — full migration replay + RLS coverage, in whichever DB mode is available.
+const DB_MODE = pickMode(TEMPLATE, process.argv);
+const reset = DB_MODE
+  ? await resetDb(DB_MODE, { root: TEMPLATE, dbUrl: DB_URL, run: tryRun })
+  : {
+      ok: false,
+      out:
+        `no database available for the gate — ${modeHint(TEMPLATE)}.\n` +
+        `Fix ONE of them:\n` +
+        `  • start Docker Desktop, then \`supabase start\`  (local mode), or\n` +
+        `  • set $SUPABASE_ACCESS_TOKEN and put a dev project ref in .dev-branch  (cloud mode).\n` +
+        `The DB checks are NOT skipped — a missing database is a failure.`,
+    };
+record(
+  `db reset (migration replay${DB_MODE ? `, ${DB_MODE}` : ''})`,
+  reset.ok,
+  reset.ok ? tail(reset.out, 3) : tail(reset.out),
+);
 
 if (reset.ok) {
   const migCount = countMigrationFiles();
-  const client = new pg.Client({ connectionString: DB_URL });
+  const client = await openDb(DB_MODE, { root: TEMPLATE, dbUrl: DB_URL });
   try {
-    await client.connect();
     await waitForSchema(client, migCount > 0); // guard the container-restart race
     // Base tables only; view/matview RLS-bypass is covered by get_advisors (CLAUDE.md).
     // permissive_count flags `using(true)`/`with check(true)` — RLS present but wide open.
@@ -308,13 +326,17 @@ if (reset.ok) {
       );
     else record('table grants', true, 'grants match policy operations');
   } catch (e) {
+    // Fail EVERY db-dependent check, not just the first — a check that silently
+    // vanishes from the report reads as "not a problem" instead of "never ran".
     record('RLS coverage', false, `DB query failed: ${e.message}`);
+    record('definer fn exposure', false, 'not run — DB query failed');
+    record('table grants', false, 'not run — DB query failed');
   } finally {
-    await client.end().catch(() => {});
+    await client.end();
   }
 
-  // 7 — generated types match the schema (no drift)
-  const gen = tryRun(`supabase gen types typescript --db-url "${DB_URL}"`);
+  // 9 — generated types match the schema (no drift)
+  const gen = tryRun(genTypesCmd(DB_MODE, { root: TEMPLATE, dbUrl: DB_URL }));
   if (!gen.ok) {
     record('types freshness', false, `gen types failed: ${tail(gen.out)}`);
   } else {
@@ -324,15 +346,41 @@ if (reset.ok) {
     } catch {
       committed = null;
     }
-    const norm = (s) => s.replace(/\r\n/g, '\n').trimEnd();
+    // `supabase gen types` emits an __InternalSupabase block (just the PostgREST version)
+    // when generating from a CLOUD project, and omits it locally. Same schema, different
+    // bytes — so without this the types would read "stale" forever after a mode switch.
+    // Strip ONLY that block and its explanatory comment; everything else is compared byte
+    // for byte. Do not grow this list — it is the one place a real diff could be hidden.
+    const stripToolMeta = (s) => {
+      const out = [];
+      const lines = s.split('\n');
+      for (let i = 0; i < lines.length; i++) {
+        if (/^\s*\/\/ (Allows to automatically instantiate|instead of createClient<)/.test(lines[i])) continue;
+        if (/^\s*__InternalSupabase:\s*\{/.test(lines[i])) {
+          let depth = 0;
+          do {
+            depth += (lines[i].match(/\{/g) || []).length - (lines[i].match(/\}/g) || []).length;
+            i++;
+          } while (i < lines.length && depth > 0);
+          i--; // the for-loop's i++ consumes the closing line
+          continue;
+        }
+        out.push(lines[i]);
+      }
+      return out.join('\n');
+    };
+    const norm = (s) => stripToolMeta(s.replace(/\r\n/g, '\n')).replace(/\n{2,}/g, '\n').trimEnd();
     if (committed === null)
       record('types freshness', false, 'src/types/database.types.ts missing — regenerate it');
     else if (norm(gen.out) === norm(committed)) record('types freshness', true, 'types match schema');
     else record('types freshness', false, 'src/types/database.types.ts is stale — regenerate it');
   }
 } else {
-  record('RLS coverage', false, 'skipped — db reset failed (is `supabase start` running?)');
-  record('types freshness', false, 'skipped — db reset failed');
+  // Every DB-dependent check is reported as FAILED (never omitted, never green).
+  record('RLS coverage', false, 'not run — migration replay failed');
+  record('definer fn exposure', false, 'not run — migration replay failed');
+  record('table grants', false, 'not run — migration replay failed');
+  record('types freshness', false, 'not run — migration replay failed');
 }
 
 // Report
@@ -346,7 +394,7 @@ try {
 } catch {
   /* fall back to the generic label */
 }
-console.log(`\n  verify — ${APP_NAME}`);
+console.log(`\n  verify — ${APP_NAME}${DB_MODE ? `  [db: ${DB_MODE}]` : '  [db: UNAVAILABLE]'}`);
 console.log(bar);
 for (const r of results) {
   if (!r.ok) allOk = false;

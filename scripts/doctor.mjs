@@ -67,7 +67,30 @@ function cmdCheck(name, cmd, { min } = {}) {
 
 cmdCheck('git', 'git --version');
 cmdCheck('gh authenticated', 'gh auth status 2>&1'); // exit 0 only when logged in
-cmdCheck('docker daemon', 'docker info --format "{{.ServerVersion}}"');
+// Docker is now OPTIONAL: verify.mjs runs its DB checks against a cloud dev project via
+// the Management API when Docker is down (scripts/lib/dbclient.mjs). So a missing daemon
+// is only a hard failure when there is ALSO no cloud path — report which mode the gate
+// would actually use, rather than a red that no longer blocks anything.
+{
+  let dockerUp = false;
+  let ver = '';
+  try {
+    ver = sh('docker info --format "{{.ServerVersion}}"').trim();
+    dockerUp = true;
+  } catch {
+    dockerUp = false;
+  }
+  const token = (process.env.SUPABASE_ACCESS_TOKEN || '').trim();
+  if (dockerUp) add('database for the gate', true, `local (Docker ${ver})`);
+  else if (token) add('database for the gate', true, 'cloud (Management API) — Docker not needed');
+  else
+    add(
+      'database for the gate',
+      false,
+      'neither available: Docker is down AND $SUPABASE_ACCESS_TOKEN is unset. ' +
+        'Start Docker Desktop, or set the token to use a cloud dev project.',
+    );
+}
 // Exercise the real worker binary (supabase-go), not just the shim — the shim
 // reports a version even when supabase-go is missing (a vacuous green we hit once).
 cmdCheck('supabase cli', 'supabase-go --version');

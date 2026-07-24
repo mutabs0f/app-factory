@@ -10,6 +10,16 @@ Put the real app in Basim's hand over Expo Go. This is the review that matters �
 ## Before you start
 - Read `docs/SPEC.md` (the screens he should see) and `LESSONS.md`.
 
+## 0. Prefer a LINK when the app can be previewed on the web
+
+Basim opening a link beats Basim opening Expo Go — no app to install, no QR, no tunnel, no "Could not connect", and he can look at it later, on any device, without the PC on. **If the app has no native-only dependency, do this first:**
+
+    node scripts/deploy-web.mjs --preview
+
+It exports the web build, deploys it, and **fetches the URL to prove it responds** before reporting it. Send him the link. Requires a one-time `npx vercel login` in his own terminal — the script tells him exactly that if he hasn't.
+
+Use the Expo tunnel below **instead** when the app depends on native modules that don't run on web (camera, secure enclave, HealthKit…), or when he specifically wants the native feel. When in doubt, do both — the link costs ~2 minutes.
+
 ## 1. Serve over the tunnel
 Run in the background (tunnel works over cellular — no shared Wi-Fi needed):
 

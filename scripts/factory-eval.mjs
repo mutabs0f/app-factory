@@ -58,7 +58,7 @@ check('.gitignore covers .env', /^\.env$/m.test(read('.gitignore')));
 check('keys marker NOT copied', !has('config/.keys-provisioned'));
 
 // 4. the system travels with the app
-for (const s of ['new-app', 'design-import', 'preview', 'build', 'verify-app', 'review', 'ship'])
+for (const s of ['new-app', 'design-import', 'preview', 'build', 'verify-app', 'review', 'ship', 'app', 'undo'])
   check(`skill ${s}`, has(`.claude/skills/${s}/SKILL.md`));
 for (const a of ['advisor', 'code-reviewer', 'db-guard'])
   check(`subagent ${a}`, has(`.claude/agents/${a}.md`));
@@ -75,7 +75,7 @@ try {
   const hookCmds = JSON.stringify(settings.hooks || {});
   check('guard hooks wired', hookCmds.includes('guard-run.mjs') && hookCmds.includes('secret-scan.mjs'));
 } catch (e) { check('settings.json parses', false, e.message); }
-for (const s of ['verify.mjs', 'collect-keys.mjs', 'guard-run.mjs', 'guard-bash.mjs', 'secret-scan.mjs', 'new-migration.mjs', 'design-brief.mjs', 'design-import.mjs'])
+for (const s of ['verify.mjs', 'collect-keys.mjs', 'guard-run.mjs', 'guard-bash.mjs', 'secret-scan.mjs', 'new-migration.mjs', 'design-brief.mjs', 'design-import.mjs', 'deploy-web.mjs', 'lib/dbclient.mjs'])
   check(`script ${s}`, has(`scripts/${s}`));
 check('LESSONS.md travels', has('LESSONS.md'));
 

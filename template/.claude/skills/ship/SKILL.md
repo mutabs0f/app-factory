@@ -33,13 +33,16 @@ change Basim approves, not an in-the-moment improvisation.)
 1. `node scripts/verify.mjs` must be green **including the `web bundle (expo export)` check** — for a
    PWA app that web bundle IS the deliverable, so a gate that only built iOS proves nothing. If you
    don't see a `web bundle` line, `docs/DECISIONS.md` doesn't say PWA — stop and reconcile it.
-2. `npx expo export --platform web` → static output in `dist/`.
-3. Deploy: `npx vercel deploy --prod dist` (first run prompts a browser login — **tell Basim it will
-   ask him to sign in once, and wait for him**; don't background it).
-   The build must point at the **cloud** Supabase, never localhost — check `.env` before deploying.
-4. Confirm the deploy is live by **opening the URL and seeing the sign-in screen render** — never
-   assume from a successful CLI exit. Report the URL.
-5. Basim's part: Safari → open the URL → **Share → Add to Home Screen**. It runs as a home-screen
+2. Deploy — one command does export + deploy + liveness proof:
+
+       node scripts/deploy-web.mjs
+
+   It refuses to deploy a build whose `.env` points at localhost/LAN (the malaki mistake), and it
+   **GETs the deployed URL and requires a 2xx before printing it** — a CLI exit code is not proof a
+   site is up. First run needs a one-time `npx vercel login` in Basim's own terminal; the script
+   prints that instruction and halts rather than pretending. Don't background it.
+3. Report the URL the script printed. Never a URL you did not see it verify.
+4. Basim's part: Safari → open the URL → **Share → Add to Home Screen**. It runs as a home-screen
    app with its own icon, no 7-day expiry, nothing to re-sign.
 
 **Be accurate about push:** iOS supports Web Push **only** for a site the user has added to the Home
