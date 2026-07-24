@@ -147,6 +147,26 @@ function checkDecisionsResolved() {
   );
 }
 
+// The gate must check the artifact the user actually RECEIVES. An app whose DECISIONS.md
+// resolves Delivery to PWA ships a WEB bundle — exporting only iOS would leave its real
+// deliverable ungated (a green that proves nothing about what lands on his phone).
+function deliveryTargets() {
+  const targets = ['ios'];
+  let text = '';
+  try {
+    text = readFileSync(join(TEMPLATE, 'docs', 'DECISIONS.md'), 'utf8');
+  } catch {
+    return targets;
+  }
+  for (const line of text.split('\n')) {
+    if (!line.trim().startsWith('|')) continue;
+    const cells = line.split('|').map((c) => c.trim());
+    if (!/^delivery\b/i.test(cells[1] ?? '')) continue;
+    if (/\bPWA\b|home[- ]screen|web export/i.test(cells[2] ?? '')) targets.push('web');
+  }
+  return targets;
+}
+
 // Ride out the container-restart race: `supabase db reset` can return while the DB
 // container is still restarting, so the schema query can transiently see 0 tables
 // (which used to flash a false "no public tables" green). Poll until a public table
@@ -175,8 +195,12 @@ async function waitForSchema(client, expectTables) {
 { const r = tryRun('npx eslint .'); record('lint (eslint)', r.ok, r.ok ? '' : tail(r.out)); }
 // 3 — tests
 { const r = tryRun('npx jest --ci --forceExit'); record('tests (jest)', r.ok, r.ok ? '' : tail(r.out)); }
-// 4 — iOS bundle actually builds
-{ const r = tryRun('npx expo export --platform ios'); record('iOS bundle (expo export)', r.ok, r.ok ? '' : tail(r.out)); }
+// 4 — the delivery bundle(s) actually build. Always iOS; ALSO web when this app's
+// DECISIONS.md resolves Delivery to PWA (that web bundle IS the deliverable).
+for (const platform of deliveryTargets()) {
+  const r = tryRun(`npx expo export --platform ${platform}`);
+  record(`${platform === 'ios' ? 'iOS' : 'web'} bundle (expo export)`, r.ok, r.ok ? '' : tail(r.out));
+}
 // 5 — no secrets anywhere (before DB checks, so it can never be skipped by an earlier failure)
 { const r = tryRun('node scripts/secret-scan.mjs'); record('secret scan', r.ok, r.ok ? '' : tail(r.out)); }
 // 6 — every OR-decision resolved to one choice (anti-malaki; docs-only, so it always runs)
@@ -314,7 +338,15 @@ if (reset.ok) {
 // Report
 let allOk = true;
 const bar = '  ' + '-'.repeat(58);
-console.log('\n  verify — app-factory template');
+// Name the app being verified, not the template it came from — running this in an app
+// and seeing someone else's project name is exactly the kind of small lie that erodes trust.
+let APP_NAME = 'app';
+try {
+  APP_NAME = JSON.parse(readFileSync(join(TEMPLATE, 'package.json'), 'utf8')).name || APP_NAME;
+} catch {
+  /* fall back to the generic label */
+}
+console.log(`\n  verify — ${APP_NAME}`);
 console.log(bar);
 for (const r of results) {
   if (!r.ok) allOk = false;

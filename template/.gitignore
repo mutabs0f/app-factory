@@ -41,6 +41,7 @@ yarn-error.*
 
 # key-intake provisioning marker (names only, per-machine) — written by collect-keys.mjs
 config/.keys-provisioned
+config/.keys-deferred
 
 # verify.mjs pass marker
 .verify-pass

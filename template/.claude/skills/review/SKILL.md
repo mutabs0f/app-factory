@@ -30,7 +30,7 @@ Record each finding in `docs/REVIEW-LOG.md` (Findings table) — **on disk, not 
 
 ## 5. The executed security gate
 Beyond `verify.mjs`, run these against the live project and record results in `REVIEW-LOG.md` — all must be clean (or each explicitly waived with a written reason, e.g. leaked-password in `DECISIONS.md`):
-- **`get_advisors`** (security AND performance): zero unresolved.
+- **`get_advisors`** (security AND performance): zero unresolved. **First `list_projects` and confirm the ref is `ACTIVE_HEALTHY`** — a paused project returns an empty `lints` array that looks identical to a clean bill of health. An advisor result from a paused project is no result at all.
 - **RLS coverage + secret scan**: green — `verify.mjs` asserts these; confirm, don't assume.
 - **No policy references `user_metadata`** (user-editable → privilege escalation).
 - **Storage buckets private** with their own `storage.objects` policies (only if the app uses storage).

@@ -12,12 +12,22 @@
 // makes NO external request; a value is never logged or echoed back; the server accepts one
 // SUCCESSFUL submission then shuts down. Pure Node, zero dependencies.
 //
-// Modes:  node scripts/collect-keys.mjs           interactive intake
+// PARTIAL SAVE: every key carries an "I can't get this one yet" defer box. Save is enabled as
+// soon as nothing on the page is INVALID — a deferred key no longer blocks the keys you DO have
+// (one unobtainable key used to freeze the whole pipeline at S1 with no override). Deferring is
+// recorded by NAME in config/.keys-deferred and is deliberately NOT a green: `--check` still
+// fails, because a deferred-but-required key is an honest red. To clear it, either mark the key
+// `required: false` in the manifest with a written reason in docs/DECISIONS.md, or cut the
+// feature that needs it from v1. Never paper over it.
+//
+// Modes:  node scripts/collect-keys.mjs           interactive intake (PC only, 127.0.0.1)
+//         node scripts/collect-keys.mjs --lan      also serve on this PC's LAN IP (open on your phone)
 //         node scripts/collect-keys.mjs --check    presence-only check (exit 0/1), no server
 import { createServer } from 'node:http';
 import { spawn } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { networkInterfaces } from 'node:os';
 import { join } from 'node:path';
 
 const ROOT = process.cwd();
@@ -25,6 +35,7 @@ const MANIFEST = join(ROOT, 'config', 'integrations.json');
 const ENV_FILE = join(ROOT, '.env');
 const ENV_EXAMPLE = join(ROOT, '.env.example');
 const PROVISIONED = join(ROOT, 'config', '.keys-provisioned'); // gitignored, names only
+const DEFERRED = join(ROOT, 'config', '.keys-deferred'); // gitignored, names only
 
 function loadManifest() {
   if (!existsSync(MANIFEST)) {
@@ -71,10 +82,10 @@ function envKeysPresent() {
   return set;
 }
 
-function provisionedSecrets() {
+function readNameList(file) {
   const set = new Set();
-  if (existsSync(PROVISIONED)) {
-    for (const line of readFileSync(PROVISIONED, 'utf8').split(/\r?\n/)) {
+  if (existsSync(file)) {
+    for (const line of readFileSync(file, 'utf8').split(/\r?\n/)) {
       const name = line.trim();
       if (name && !name.startsWith('#')) set.add(name);
     }
@@ -82,21 +93,37 @@ function provisionedSecrets() {
   return set;
 }
 
+const provisionedSecrets = () => readNameList(PROVISIONED);
+const deferredKeys = () => readNameList(DEFERRED);
+
 // ---- --check mode: presence only, never values ----
 function runCheck(keys) {
   const envSet = envKeysPresent();
   const secretSet = provisionedSecrets();
+  const deferredSet = deferredKeys();
   const missing = [];
+  const deferred = [];
   for (const k of keys) {
     if (!k.required) continue;
-    if (k.destination === 'app-env') {
-      if (!envSet.has(k.env)) missing.push(k.env);
-    } else if (!secretSet.has(k.env)) {
-      missing.push(k.env);
-    }
+    const have = k.destination === 'app-env' ? envSet.has(k.env) : secretSet.has(k.env);
+    if (have) continue;
+    // A deferred key is still MISSING for the gate — deferring unblocks the FORM, never the gate.
+    if (deferredSet.has(k.env)) deferred.push(k.env);
+    else missing.push(k.env);
   }
-  if (missing.length) {
-    console.error(`env incomplete — missing required key(s): ${missing.join(', ')}\n` + `Run: node scripts/collect-keys.mjs`);
+  if (missing.length || deferred.length) {
+    if (missing.length) console.error(`env incomplete — missing required key(s): ${missing.join(', ')}`);
+    if (deferred.length) {
+      console.error(
+        `env incomplete — required key(s) you DEFERRED: ${deferred.join(', ')}\n` +
+          `  A deferred key is an honest red, not a pass. Resolve it one of two ways:\n` +
+          `    1. Get the key and re-run the form, OR\n` +
+          `    2. Decide this app's v1 does not need it — set "required": false in\n` +
+          `       config/integrations.json AND record the reason in docs/DECISIONS.md\n` +
+          `       (cutting the feature that needed it, if any).`,
+      );
+    }
+    console.error(`Run: node scripts/collect-keys.mjs`);
     process.exit(1);
   }
   console.log(`env complete — all required keys present (${keys.filter((k) => k.required).length} required).`);
@@ -129,12 +156,32 @@ function recordProvisioned(names) {
   writeFileSync(PROVISIONED, header + [...have].sort().join('\n') + '\n');
 }
 
+// Names only. A deferred key stays RED in --check; this file records WHICH keys are
+// outstanding-by-choice so the next session can pick the conversation back up.
+function recordDeferred(names, unDefer) {
+  const have = deferredKeys();
+  for (const n of names) have.add(n);
+  for (const n of unDefer) have.delete(n); // a key that arrived is no longer deferred
+  const header =
+    '# Names (never values) of required keys you chose to defer ("I can\'t get this one yet").\n' +
+    '# Still a FAILING gate — resolve by getting the key, or by setting "required": false in\n' +
+    '# config/integrations.json with a reason recorded in docs/DECISIONS.md.\n';
+  writeFileSync(DEFERRED, header + [...have].sort().join('\n') + '\n');
+}
+
 // Authoritative server-side validation (the page also validates, but never trust the client).
 function validate(keys, values) {
   const errors = {};
   const appEnv = {};
   const confirmedSecrets = [];
+  const deferred = [];
   for (const k of keys) {
+    // "I can't get this one yet" — record the name, skip validation, do NOT error.
+    // This unblocks the rest of the form; runCheck() keeps the gate red.
+    if (values['__defer__' + k.env] === true) {
+      deferred.push(k.env);
+      continue;
+    }
     if (k.destination === 'app-env') {
       // Allowlist-first, independent of the pasted value: an app-env key MUST be a public
       // EXPO_PUBLIC_* var with an anchored format. This closes the mis-authored-manifest path
@@ -172,7 +219,7 @@ function validate(keys, values) {
       if (confirmed) confirmedSecrets.push(k.env);
     }
   }
-  return { errors, appEnv, confirmedSecrets };
+  return { errors, appEnv, confirmedSecrets, deferred };
 }
 
 const esc = (s) => String(s).replace(/[<>&"]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' }[c]));
@@ -204,6 +251,9 @@ function pageHtml(keys, token) {
   input.ok { border-color: #16a34a; } input.bad { border-color: #dc2626; }
   .msg { font-size: .85rem; margin-top: 6px; min-height: 1.1em; } .msg.ok { color: #16a34a; } .msg.bad { color: #dc2626; }
   label.confirm { display: flex; gap: 10px; align-items: flex-start; margin-top: 8px; }
+  label.defer { display: flex; gap: 8px; align-items: center; margin-top: 10px; font-size: .85rem; opacity: .75; }
+  .card.deferred { opacity: .55; }
+  .card.deferred input[type=text], .card.deferred label.confirm { display: none; }
   button { width: 100%; padding: 14px; font-size: 1.05rem; border: 0; border-radius: 10px; background: #2563eb; color: #fff; font-weight: 600; margin-top: 10px; }
   button:disabled { background: #8888; }
   #done { display: none; padding: 16px; border-radius: 12px; background: #16a34a22; border: 1px solid #16a34a; }
@@ -211,7 +261,8 @@ function pageHtml(keys, token) {
 </head>
 <body>
 <h1>Set up your app's keys</h1>
-<p class="sub">إعداد مفاتيح التطبيق — one box per key. Paste, check the green tick, then Save.</p>
+<p class="sub">إعداد مفاتيح التطبيق — one box per key. Paste, check the green tick, then Save.<br>
+Can't get one right now? Tick <b>"I can't get this one yet"</b> and save the rest — you won't lose the keys you do have.</p>
 <form id="f" autocomplete="off"></form>
 <div id="done"></div>
 <script>
@@ -238,11 +289,16 @@ for (const k of KEYS){
   } else {
     inner += '<label class="confirm"><input type="checkbox" id="c_'+k.env+'"><span>This key is <b>secret</b> — set it in the dashboard using the steps above (it is never stored in the app). Tick when done.</span></label>';
   }
-  card.innerHTML = inner; f.appendChild(card);
+  inner += '<label class="defer"><input type="checkbox" id="d_'+k.env+'"><span>I can\\'t get this one yet — save the others without it</span></label>';
+  card.innerHTML = inner; card.id='card_'+k.env; f.appendChild(card);
 }
 const btn = document.createElement('button'); btn.textContent='Save keys'; btn.type='button'; btn.disabled=true; f.appendChild(btn);
 
+const isDeferred = (k) => document.getElementById('d_'+k.env).checked;
 function validateField(k){
+  const card=document.getElementById('card_'+k.env);
+  if (isDeferred(k)){ card.className='card deferred'; state[k.env]=true; return; }
+  card.className='card';
   if (k.destination!=='app-env'){ state[k.env]=document.getElementById('c_'+k.env).checked || !k.required; return; }
   const el=document.getElementById('i_'+k.env), msg=document.getElementById('m_'+k.env);
   const v=el.value.trim();
@@ -255,10 +311,21 @@ function validateField(k){
   msg.textContent=text; msg.className='msg '+(ok&&v?'ok':(v?'bad':''));
   state[k.env]= ok && (v!=='' || !k.required);
 }
-function refresh(){ let all=true; for(const k of KEYS){ if(state[k.env]!==true) all=false; } btn.disabled=!all; }
+function refresh(){
+  let all=true, deferredCount=0, ready=0;
+  for(const k of KEYS){
+    if(state[k.env]!==true) all=false;
+    if(isDeferred(k)) deferredCount++; else ready++;
+  }
+  btn.disabled=!all;
+  btn.textContent = deferredCount
+    ? 'Save '+ready+' key'+(ready===1?'':'s')+' — '+deferredCount+' left for later'
+    : 'Save keys';
+}
 for (const k of KEYS){
   if(k.destination==='app-env') document.getElementById('i_'+k.env).addEventListener('input',()=>{validateField(k);refresh();});
   else document.getElementById('c_'+k.env).addEventListener('change',()=>{validateField(k);refresh();});
+  document.getElementById('d_'+k.env).addEventListener('change',()=>{validateField(k);refresh();});
   validateField(k);
 }
 refresh();
@@ -266,6 +333,7 @@ btn.addEventListener('click', async ()=>{
   btn.disabled=true; btn.textContent='Saving…';
   const body={};
   for(const k of KEYS){
+    if(isDeferred(k)){ body['__defer__'+k.env]=true; continue; }
     if(k.destination==='app-env') body[k.env]=document.getElementById('i_'+k.env).value.trim();
     else body['__confirm__'+k.env]=document.getElementById('c_'+k.env).checked;
   }
@@ -275,7 +343,10 @@ btn.addEventListener('click', async ()=>{
     if(j.ok){
       f.style.display='none';
       const d=document.getElementById('done'); d.style.display='block';
-      d.innerHTML='<b>✓ Saved.</b> Your keys are set. You can close this tab and return to the app.';
+      d.innerHTML = (j.deferred&&j.deferred.length)
+        ? '<b>✓ Saved what you have.</b> Still to come: <b>'+j.deferred.join(', ')+'</b>.'
+          +'<br>Nothing is lost — tell Claude when you get them (or that this app doesn\\'t need them) and it will reopen this page.'
+        : '<b>✓ Saved.</b> Your keys are set. You can close this tab and return to the app.';
     } else {
       btn.disabled=false; btn.textContent='Save keys';
       for(const [env,err] of Object.entries(j.errors||{})){ const m=document.getElementById('m_'+env); if(m){ m.textContent='✗ '+err; m.className='msg bad'; } }
@@ -298,7 +369,13 @@ function openBrowser(url) {
   }
 }
 
-function runIntake(keys) {
+function lanAddress() {
+  for (const list of Object.values(networkInterfaces()))
+    for (const ni of list || []) if (ni.family === 'IPv4' && !ni.internal) return ni.address;
+  return null;
+}
+
+function runIntake(keys, lan) {
   const token = randomBytes(18).toString('hex');
   const required = keys.filter((k) => k.required).length;
   const server = createServer((req, res) => {
@@ -317,7 +394,8 @@ function runIntake(keys) {
       // Defense-in-depth beyond the token: reject a cross-origin poster. Our own page fetches
       // same-origin (sends this Origin); a different local page would not match.
       const origin = req.headers.origin;
-      if (origin && !/^http:\/\/(127\.0\.0\.1|localhost|\[::1\]):\d+$/.test(origin)) {
+      const ORIGIN_OK = lan ? /^http:\/\/[0-9a-zA-Z.\-[\]:]+:\d+$/ : /^http:\/\/(127\.0\.0\.1|localhost|\[::1\]):\d+$/;
+      if (origin && !ORIGIN_OK.test(origin)) {
         res.writeHead(403, { 'content-type': 'text/plain' });
         res.end('bad origin');
         return;
@@ -336,7 +414,7 @@ function runIntake(keys) {
           res.end(JSON.stringify({ ok: false, errors: { _: 'bad request' } }));
           return;
         }
-        const { errors, appEnv, confirmedSecrets } = validate(keys, values);
+        const { errors, appEnv, confirmedSecrets, deferred } = validate(keys, values);
         if (Object.keys(errors).length) {
           res.writeHead(400, { 'content-type': 'application/json' });
           res.end(JSON.stringify({ ok: false, errors })); // error TEXT only, never the pasted value
@@ -345,10 +423,18 @@ function runIntake(keys) {
         // success: persist (values written, never logged), then one-shot shutdown
         if (Object.keys(appEnv).length) writeEnv(appEnv);
         if (confirmedSecrets.length) recordProvisioned(confirmedSecrets);
+        const arrived = [...Object.keys(appEnv), ...confirmedSecrets];
+        if (deferred.length || existsSync(DEFERRED)) recordDeferred(deferred, arrived);
         res.writeHead(200, { 'content-type': 'application/json' });
-        res.end(JSON.stringify({ ok: true, saved: Object.keys(appEnv), confirmed: confirmedSecrets }));
-        const savedMsg = [...Object.keys(appEnv), ...confirmedSecrets].join(', ');
-        console.log(`\n✓ Keys captured (${savedMsg}). .env written; no values logged.`);
+        res.end(JSON.stringify({ ok: true, saved: Object.keys(appEnv), confirmed: confirmedSecrets, deferred }));
+        console.log(`\n✓ Keys captured (${arrived.join(', ') || 'none'}). .env written; no values logged.`);
+        // A deferred REQUIRED key keeps the gate red on purpose — say so plainly, never imply done.
+        const stillRequired = deferred.filter((n) => keys.find((k) => k.env === n)?.required);
+        if (stillRequired.length) {
+          console.log(`\n⚠ Deferred (still REQUIRED, gate stays red): ${stillRequired.join(', ')}`);
+          console.log(`  Next: get the key and re-run this, OR decide v1 doesn't need it —`);
+          console.log(`  set "required": false in config/integrations.json and write the reason in docs/DECISIONS.md.`);
+        }
         server.close();
         setTimeout(() => process.exit(0), 100);
       });
@@ -357,12 +443,18 @@ function runIntake(keys) {
     res.writeHead(404, { 'content-type': 'text/plain' });
     res.end('not found');
   });
-  server.listen(0, '127.0.0.1', () => {
+  server.listen(0, lan ? '0.0.0.0' : '127.0.0.1', () => {
     const port = server.address().port;
     const url = `http://127.0.0.1:${port}/?token=${token}`;
     console.log(`\nOpening the key-setup page in your browser…`);
     console.log(`If it doesn't open, paste this into a browser on THIS machine:\n  ${url}\n`);
-    console.log(`Waiting for ${required} required key(s). The page runs only on your PC and sends nothing anywhere.`);
+    if (lan) {
+      const ip = lanAddress();
+      if (ip) console.log(`On your PHONE (same Wi-Fi), open:\n  http://${ip}:${port}/?token=${token}\n`);
+      else console.log(`--lan requested but no LAN address was found; PC-only URL above.\n`);
+    }
+    console.log(`Waiting for ${required} required key(s). Can't get one? Tick "I can't get this one yet" and save the rest.`);
+    console.log(lan ? `Reachable on your local network only (one-time token). It sends nothing anywhere.` : `The page runs only on your PC and sends nothing anywhere.`);
     openBrowser(url);
   });
   // If the user never submits, the process stays up until killed → non-zero via SIGINT.
@@ -377,4 +469,4 @@ if (process.argv.includes('--check')) runCheck(keys);
 else if (keys.length === 0) {
   console.log('No integrations in the manifest — nothing to collect.');
   process.exit(0);
-} else runIntake(keys);
+} else runIntake(keys, process.argv.includes('--lan'));

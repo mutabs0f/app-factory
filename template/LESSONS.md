@@ -18,6 +18,14 @@ template itself — so the next app is born without the bug.
   destructuring `{ result }` yields `undefined` (tsc catches this).
 
 ## Supabase
+- **A PAUSED project fakes a perfect security score.** Free-tier projects go
+  `INACTIVE` after ~a week idle. `get_advisors` on a paused project returns
+  `{"lints":[]}` — byte-identical to "zero findings", which is the exact green the S1
+  gate wants. Verified 2026-07-24 against `provider-scout-dev` (INACTIVE): the advisor
+  call returned an empty lints array. **Always `list_projects` and require
+  `status: ACTIVE_HEALTHY` before believing an advisor result.** This is the
+  fabricated-success failure class (principle #1) reappearing from the vendor side
+  rather than from our own code — a missing signal that *looks* like a passing one.
 - **A `SECURITY DEFINER` function in the `public` schema is exposed as a PostgREST
   RPC** and get_advisors flags it (anon/authenticated can call it — a privilege-
   escalation surface). Trigger functions don't need EXECUTE granted to callers (the

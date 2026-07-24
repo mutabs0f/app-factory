@@ -20,6 +20,7 @@ This repo builds a mobile app on **Expo SDK 54 + Supabase** (thin-client model).
 - **Session storage:** `LargeSecureStore` (`src/lib/storage.ts`) — ships in the template, reused as-is.
 - **Server logic:** Postgres `.rpc()` for atomic multi-statement ops; **Edge Functions only** for third-party secrets, signed webhooks, or server-authoritative logic (money, credits, cross-user writes).
 - **Schema changes:** only by adding files to `supabase/migrations/` (never the dashboard). After each migration, regenerate types and run `get_advisors`.
+- **A PAUSED Supabase project fakes a perfect security score.** Free-tier projects go `INACTIVE` after ~a week idle, and `get_advisors` on one returns `{"lints":[]}` — indistinguishable from "zero findings". **Always `list_projects` and confirm `status: ACTIVE_HEALTHY` before believing any advisor result.** An empty `lints` from a non-active project is a missing signal, and a missing signal is a failure that halts (principle #1) — never a pass.
 
 ## The seven mechanical rules
 1. `src/app/` holds only route files; every route is a thin re-export of a screen from `src/features/`.

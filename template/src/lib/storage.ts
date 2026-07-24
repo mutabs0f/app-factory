@@ -1,7 +1,16 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as aesjs from 'aes-js';
 import * as SecureStore from 'expo-secure-store';
+import { Platform } from 'react-native';
 import 'react-native-get-random-values';
+
+// expo-secure-store is a NATIVE module — it does not exist on web. An app whose
+// delivery path is PWA runs this exact class in a browser, where every SecureStore
+// call throws and the user can never stay signed in. On web we therefore skip the
+// encrypt-to-Keychain layer entirely and let AsyncStorage (localStorage-backed)
+// hold the session, which is what supabase-js does by default in a browser.
+// The Keychain dance exists only to work around iOS's ~2KB Keychain limit.
+const IS_WEB = Platform.OS === 'web';
 
 // LargeSecureStore — the Supabase session store used by every app in the factory.
 // expo-secure-store (iOS Keychain) has a ~2KB limit, and Supabase sessions can
@@ -31,9 +40,10 @@ export class LargeSecureStore {
 
   async getItem(key: string): Promise<string | null> {
     try {
-      const encrypted = await AsyncStorage.getItem(key);
-      if (!encrypted) return null;
-      return await this._decrypt(key, encrypted);
+      const stored = await AsyncStorage.getItem(key);
+      if (!stored) return null;
+      if (IS_WEB) return stored;
+      return await this._decrypt(key, stored);
     } catch {
       // Corrupted ciphertext or a Keychain/Keystore error → treat as "no value"
       // so Supabase falls back to signed-out and the user simply re-authenticates.
@@ -42,12 +52,16 @@ export class LargeSecureStore {
   }
 
   async setItem(key: string, value: string): Promise<void> {
+    if (IS_WEB) {
+      await AsyncStorage.setItem(key, value);
+      return;
+    }
     const encrypted = await this._encrypt(key, value);
     await AsyncStorage.setItem(key, encrypted);
   }
 
   async removeItem(key: string): Promise<void> {
-    await SecureStore.deleteItemAsync(key);
+    if (!IS_WEB) await SecureStore.deleteItemAsync(key);
     await AsyncStorage.removeItem(key);
   }
 }
