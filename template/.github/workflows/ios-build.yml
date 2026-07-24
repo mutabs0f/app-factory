@@ -79,7 +79,16 @@ jobs:
 
       - name: Resolve Xcode scheme
         id: scheme
-        run: echo "name=$(ls ios/*.xcworkspace | head -1 | xargs basename | sed 's/\.xcworkspace//')" >> "$GITHUB_OUTPUT"
+        # `.xcworkspace` is a DIRECTORY, so plain `ls` prints its CONTENTS
+        # (contents.xcworkspacedata) instead of its name — the sed then mangled that into
+        # "contentsdata" and every archive failed with "does not exist". `-d` prints the
+        # directory itself. Fail loudly rather than archiving a nonsense scheme name.
+        run: |
+          ws=$(ls -d ios/*.xcworkspace 2>/dev/null | head -1)
+          if [ -z "$ws" ]; then echo "::error::No .xcworkspace under ios/ — did prebuild/pod install run?"; exit 1; fi
+          name=$(basename "$ws" .xcworkspace)
+          echo "Resolved scheme: $name"
+          echo "name=$name" >> "$GITHUB_OUTPUT"
 
       - name: Archive without code signing
         run: |
