@@ -65,7 +65,13 @@ for (const a of ['advisor', 'code-reviewer', 'db-guard'])
 check('advisor pinned to Fable 5', has('.claude/agents/advisor.md') && read('.claude/agents/advisor.md').includes('model: claude-fable-5'));
 try {
   const settings = JSON.parse(read('.claude/settings.json'));
-  check('executor pinned to Opus 4.8', settings.model === 'claude-opus-4-8');
+  // Assert a CURRENT frontier model, not one exact string — pinning the assertion to a
+  // single id turned this check into a ratchet that reported GREEN for a stale pin.
+  // Update the allowed set deliberately when a new frontier model ships.
+  check(
+    `executor pinned to a current model (got ${settings.model})`,
+    ['claude-opus-5', 'claude-sonnet-5'].includes(settings.model),
+  );
   const hookCmds = JSON.stringify(settings.hooks || {});
   check('guard hooks wired', hookCmds.includes('guard-run.mjs') && hookCmds.includes('secret-scan.mjs'));
 } catch (e) { check('settings.json parses', false, e.message); }

@@ -8,6 +8,15 @@ name: iOS build (unsigned IPA)
 
 on:
   workflow_dispatch:
+    inputs:
+      # macOS runners bill at 10x on PRIVATE repos (~200 real free minutes/month), and a
+      # build is 20-40 min. Building both variants by default burns the month's quota on a
+      # single dispatch. Default to `release` alone; ask for more only when you need it.
+      variant:
+        description: 'Which IPA to build'
+        type: choice
+        default: release
+        options: [release, dev-client, both]
   push:
     tags: ['v*']
 
@@ -19,7 +28,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        variant: [release, dev-client]
+        # A tag push (no inputs) keeps the original behaviour: build both.
+        variant: >-
+          ${{ (github.event_name != 'workflow_dispatch' || inputs.variant == 'both')
+              && fromJSON('["release","dev-client"]')
+              || fromJSON(format('["{0}"]', inputs.variant)) }}
     steps:
       - uses: actions/checkout@v4
 
