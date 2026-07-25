@@ -62,3 +62,6 @@ app-example
 # generated native folders
 /ios
 /android
+
+# Metro/Expo cache (created by `expo export --clear`)
+.cache/

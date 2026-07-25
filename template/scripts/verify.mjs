@@ -201,8 +201,15 @@ async function waitForSchema(client, expectTables) {
 { const r = tryRun('npx jest --ci --forceExit'); record('tests (jest)', r.ok, r.ok ? '' : tail(r.out)); }
 // 4 — the delivery bundle(s) actually build. Always iOS; ALSO web when this app's
 // DECISIONS.md resolves Delivery to PWA (that web bundle IS the deliverable).
+// --clear is NOT optional here. Measured 2026-07-25: without it, `expo export` happily
+// succeeds from a stale Metro cache and bakes in the env values from whenever that cache
+// was built. A bundle built before .env was filled inlined `undefined` for
+// EXPO_PUBLIC_SUPABASE_URL, so supabase.ts threw at import and the app rendered a BLANK
+// PAGE — while this check reported PASS. The gate would bless a broken artifact, and the
+// bundle secret-scan below would scan the wrong file. Correctness beats the extra seconds;
+// the fast inner loop skips the export entirely rather than trusting a cache.
 for (const platform of deliveryTargets()) {
-  const r = tryRun(`npx expo export --platform ${platform}`);
+  const r = tryRun(`npx expo export --platform ${platform} --clear`);
   record(`${platform === 'ios' ? 'iOS' : 'web'} bundle (expo export)`, r.ok, r.ok ? '' : tail(r.out));
 }
 // 5 — no secrets anywhere (before DB checks, so it can never be skipped by an earlier failure)
