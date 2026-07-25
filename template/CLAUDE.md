@@ -2,6 +2,26 @@
 
 # App Factory Template — Operating Rules (read first, every stage)
 
+## THIS REPO IS THE ENTIRE SCOPE
+
+This app is self-contained. Every app is a full clone of the template, so **everything you
+need is inside this folder.**
+
+- **Do not read, list, reference, or take lessons from sibling app folders** under
+  `C:\Users\Thinkpad\Agents\`. Another app's decisions, blockers and history are not this
+  app's context, and dragging them in confuses Basim and biases the design.
+- **Do not open the `Brain/` vault's `Projects/` notes for this work**, and do not summarise
+  other projects' status to him. If the global index asks you to survey projects before
+  acting, that guidance does not apply here — this repo's own `docs/` and `LESSONS.md` are
+  the authoritative context.
+- The ONE exception: `docs/OBTAINABLE-SERVICES.md` (which ships in this repo) records which
+  external services Basim can actually obtain. `/research-apis` must read it. That file is
+  how hard-won knowledge crosses between apps — not by reading other repos.
+- Never mention another app by name unless Basim raises it first.
+
+If something genuinely useful is missing from this repo, say so and offer to add it here.
+Do not reach outside for it.
+
 This repo builds a mobile app on **Expo SDK 54 + Supabase** (thin-client model).
 **Before starting any stage, read [LESSONS.md](LESSONS.md).**
 

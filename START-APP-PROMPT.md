@@ -6,6 +6,11 @@
    refuses, that is fine: the gate can run against a cloud dev project instead.)
 2. **New Claude Code session** with the folder set to `C:\Users\Thinkpad\Agents`.
 3. Fill in the brackets below, paste the whole thing, send.
+4. **When it finishes scaffolding, close that session and open a NEW one with the folder set
+   to the new app** (`C:\Users\Thinkpad\Agents\<slug>`). Then type `/app`.
+
+Step 4 matters: `Agents\` holds every project you have ever built, and a session sitting there
+can see all of them. Inside the app folder it sees one app — which is the point.
 
 That is it. Everything else is the system's job.
 
@@ -57,18 +62,23 @@ never a green you did not run.
 - The answers above **pre-fill `/discuss` and `/new-app`'s questions — do not re-ask what is
   already answered.** Still present the integrations table and stop.
 - Unanswered brackets mean "ask, or use the documented default and say which you used".
-- The flow is: `/new-app-project` scaffolds the repo → `cd` into it → **`/app`** drives
-  `discuss → research-apis → new-app → design-import → preview → build → review → ship`.
-  `/app` is the only command he should need to type after the scaffold.
-- **Known live blockers to check early, before designing around them:**
-  - Google APIs (incl. Maps) are **unobtainable** for him — Saudi billing goes through a
-    reseller whose individual onboarding has been closed since ~Feb 2025. `provider-scout` is
-    parked on exactly this. See `template/docs/OBTAINABLE-SERVICES.md`.
-  - SMS/OTP needs a company registration he does not have. Email OTP is the default.
-  - Supabase free projects **pause after ~a week idle**. A paused project makes
-    `get_advisors` return an empty list that looks like a clean bill of health — always
-    confirm `status: ACTIVE_HEALTHY` via `list_projects` first.
-  - The PWA path needs a one-time `npx vercel login` in his own terminal.
+- The flow is: `/new-app-project` scaffolds the repo → open a fresh session **inside that
+  folder** → **`/app`** drives `discuss → research-apis → new-app → design-import → preview
+  → build → review → ship`. `/app` is the only command he types after the scaffold.
+
+- **ONE APP AT A TIME. Do not bring other projects into this conversation.**
+  `C:\Users\Thinkpad\Agents\` contains many unrelated systems. Do not list them, read them,
+  compare against them, or mention another app by name unless Basim raises it. If the global
+  Brain index tells you to survey `Projects/` notes before acting, that does not apply to
+  building an app — the app's own repo is the whole scope. See the scoping rule at the top of
+  the app's `CLAUDE.md`.
+
+- **Where cross-app knowledge lives:** `docs/OBTAINABLE-SERVICES.md`, which ships inside every
+  app. It records which external services Basim can actually obtain (some are hard-blocked in
+  Saudi Arabia, and the wrong choice there kills an app after the schema is written).
+  `/research-apis` reads it and verifies against live sources. That file is the *only* channel
+  for lessons between apps — never another repo's history.
+
 - **This system has never completed a full idea → phone run.** Treat this as the pilot: when
   something breaks, fix the cause AND append the failure signature to `LESSONS.md` so the
   next app is born without it. That is the point of the exercise.
