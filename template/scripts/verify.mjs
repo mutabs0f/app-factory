@@ -199,6 +199,11 @@ async function waitForSchema(client, expectTables) {
 { const r = tryRun('npx eslint .'); record('lint (eslint)', r.ok, r.ok ? '' : tail(r.out)); }
 // 3 — tests
 { const r = tryRun('npx jest --ci --forceExit'); record('tests (jest)', r.ok, r.ok ? '' : tail(r.out)); }
+// 3b — architecture. CLAUDE.md calls its structural rules "mechanical"; until this check
+// existed they were prose, and eslint ignores scripts/ entirely — so an agent could
+// violate every one of them and still get a green gate. Enforces the supabase boundary,
+// feature encapsulation, thin routes, no barrels, and no import cycles.
+{ const r = tryRun('node scripts/arch-check.mjs'); record('architecture (boundaries, cycles)', r.ok, r.ok ? tail(r.out, 1) : tail(r.out, 20)); }
 // 4 — the delivery bundle(s) actually build. Always iOS; ALSO web when this app's
 // DECISIONS.md resolves Delivery to PWA (that web bundle IS the deliverable).
 // --clear is NOT optional here. Measured 2026-07-25: without it, `expo export` happily

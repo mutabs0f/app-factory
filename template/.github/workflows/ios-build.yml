@@ -52,6 +52,21 @@ jobs:
           echo "EXPO_PUBLIC_SUPABASE_URL=${{ vars.EXPO_PUBLIC_SUPABASE_URL }}" >> .env
           echo "EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY=${{ vars.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY }}" >> .env
 
+      # Re-run the code half of the gate HERE, independently of the agent's local session.
+      # Until now shipping trusted that the agent had actually run verify.mjs locally and
+      # told the truth about it — the one place in the whole system that rested on
+      # self-report. These are the checks that need no database, so they run unconditionally
+      # before we spend ~25 minutes of macOS runner time on a build that cannot be good.
+      # (The DB half needs a Supabase project and stays local; that gap is documented.)
+      - name: Gate — typecheck · lint · tests · architecture · secret scan
+        run: |
+          set -e
+          npx tsc --noEmit
+          npx eslint .
+          npx jest --ci --forceExit
+          node scripts/arch-check.mjs
+          node scripts/secret-scan.mjs
+
       - name: Add expo-dev-client (dev-client variant only)
         if: matrix.variant == 'dev-client'
         run: npx expo install expo-dev-client

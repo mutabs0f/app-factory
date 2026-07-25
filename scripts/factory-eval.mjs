@@ -83,7 +83,7 @@ try {
   const hookCmds = JSON.stringify(settings.hooks || {});
   check('guard hooks wired', hookCmds.includes('guard-run.mjs') && hookCmds.includes('secret-scan.mjs'));
 } catch (e) { check('settings.json parses', false, e.message); }
-for (const s of ['verify.mjs', 'collect-keys.mjs', 'guard-run.mjs', 'guard-bash.mjs', 'secret-scan.mjs', 'new-migration.mjs', 'design-brief.mjs', 'design-import.mjs', 'deploy-web.mjs', 'lib/dbclient.mjs'])
+for (const s of ['verify.mjs', 'collect-keys.mjs', 'guard-run.mjs', 'guard-bash.mjs', 'secret-scan.mjs', 'new-migration.mjs', 'design-brief.mjs', 'design-import.mjs', 'deploy-web.mjs', 'lib/dbclient.mjs', 'arch-check.mjs'])
   check(`script ${s}`, has(`scripts/${s}`));
 check('LESSONS.md travels', has('LESSONS.md'));
 
