@@ -58,7 +58,7 @@ check('.gitignore covers .env', /^\.env$/m.test(read('.gitignore')));
 check('keys marker NOT copied', !has('config/.keys-provisioned'));
 
 // 4. the system travels with the app
-for (const s of ['new-app', 'design-import', 'preview', 'build', 'verify-app', 'review', 'ship', 'app', 'undo'])
+for (const s of ['new-app', 'design-import', 'preview', 'build', 'verify-app', 'review', 'ship', 'app', 'undo', 'discuss', 'research-apis'])
   check(`skill ${s}`, has(`.claude/skills/${s}/SKILL.md`));
 for (const a of ['advisor', 'code-reviewer', 'db-guard'])
   check(`subagent ${a}`, has(`.claude/agents/${a}.md`));

@@ -45,15 +45,27 @@ function hasServiceRoleJwt(line) {
   return false;
 }
 
-const IGNORE_DIRS = new Set([
-  'node_modules', '.git', '.expo', 'dist', 'web-build', 'ios', 'android', '.vscode',
-  '.temp', '.branches', // Supabase CLI scratch (gitignored; contains catalog dumps)
-]);
+// --bundle scans the BUILT output instead of the source. This matters: the whole
+// EXPO_PUBLIC_* discipline exists to keep secrets out of the shipped JS, but until now
+// only source was scanned — the artifact that actually reaches the phone/browser never
+// was. A key can reach the bundle without appearing in source (a config plugin, an
+// app.config value, a dependency's baked-in default).
+const BUNDLE_MODE = process.argv.includes('--bundle');
+
+const IGNORE_DIRS = new Set(
+  BUNDLE_MODE
+    ? ['node_modules', '.git', '.expo', '.vscode', '.temp', '.branches']
+    : [
+        'node_modules', '.git', '.expo', 'dist', 'web-build', 'ios', 'android', '.vscode',
+        '.temp', '.branches', // Supabase CLI scratch (gitignored; contains catalog dumps)
+      ],
+);
 const IGNORE_FILES = new Set(['package-lock.json', 'yarn.lock', 'pnpm-lock.yaml']);
 const ALLOW = new Set(['.env.example', 'scripts/secret-scan.mjs']);
 const TEXT_EXT = new Set([
   '.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs', '.json', '.sql', '.md',
   '.yml', '.yaml', '.txt', '.sh', '.toml', '.env', '.example', '.local',
+  '.html', // the PWA entry document — part of the shipped bundle
 ]);
 
 function listAllFiles(dir) {
@@ -101,7 +113,15 @@ function scannable(file) {
   return TEXT_EXT.has(ext);
 }
 
-const files = ((CHANGED ? changedFiles() : null) ?? listAllFiles(ROOT)).filter(scannable);
+// In --bundle mode, scan ONLY the build output — that is the artifact that ships.
+const scanRoot = BUNDLE_MODE ? join(ROOT, 'dist') : ROOT;
+if (BUNDLE_MODE && !existsSync(scanRoot)) {
+  console.error('  secret-scan --bundle: no dist/ — run `npx expo export` first. Not scanning is not a pass.');
+  process.exit(1);
+}
+const files = (
+  BUNDLE_MODE ? listAllFiles(scanRoot) : ((CHANGED ? changedFiles() : null) ?? listAllFiles(ROOT))
+).filter(scannable);
 const findings = [];
 
 for (const file of files) {

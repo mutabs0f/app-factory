@@ -12,7 +12,17 @@ Turn `/new-app <idea>` into three committed artifacts — a one-page SPEC, the s
 - Bring the local stack up: `supabase start` (Docker) — the S1 gate needs it.
 - Wire the Supabase MCP: `cp .mcp.json.example .mcp.json`, set your dev project ref + `$SUPABASE_ACCESS_TOKEN` in your env (`get_advisors` and any MCP write need it), and put that **same dev ref in `.dev-branch`** — the push guard blocks MCP writes to anything not listed there.
 
-## 1. Ask AT MOST 5 questions
+## 1. Start from the brief — do NOT re-interrogate him
+
+If `docs/BRIEF.md` exists, **`/discuss` already settled the idea with him and `/research-apis`
+already settled the services.** Read both, and do not re-ask anything they answered. Ask only about
+a genuine gap they left open, and say why you're asking.
+
+If there is no brief (he jumped straight here), run `/discuss` first — a conversation costs minutes
+and prevents building the wrong app. Only if he explicitly wants to skip it, fall back to the
+question batch below.
+
+### Fallback: ask AT MOST 5 questions
 One batch, then stop asking. Cover only:
 1. **Target users** — who opens this app?
 2. **Must-have v1 features** — the shortest list that makes it useful.

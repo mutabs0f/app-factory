@@ -92,6 +92,35 @@ if (!existsSync(join(ROOT, 'dist', 'index.html')))
   die('web export produced no dist/index.html — nothing to deploy');
 say('  ✓ dist/ built');
 
+// Security headers. A PWA is a real website on a real origin: without these it ships with no
+// clickjacking protection, no MIME-sniffing protection, no HSTS, and a referrer that leaks
+// URLs to third parties. Written into dist/ at deploy time so it always matches what ships.
+// NOTE: no Content-Security-Policy here — Expo's web runtime needs inline/eval and a wrong
+// CSP silently white-screens the app. A CSP that breaks the app would get deleted in anger;
+// better to ship the headers that are safe to apply unconditionally and be honest about it.
+writeFileSync(
+  join(ROOT, 'dist', 'vercel.json'),
+  JSON.stringify(
+    {
+      headers: [
+        {
+          source: '/(.*)',
+          headers: [
+            { key: 'X-Content-Type-Options', value: 'nosniff' },
+            { key: 'X-Frame-Options', value: 'DENY' },
+            { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+            { key: 'Strict-Transport-Security', value: 'max-age=31536000; includeSubDomains' },
+            { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=(self), payment=()' },
+          ],
+        },
+      ],
+    },
+    null,
+    2,
+  ),
+);
+say('  ✓ security headers written');
+
 // ---------------------------------------------------------------- deploy
 say(`  Deploying to Vercel (${PROD ? 'production' : 'preview'})…`);
 const deploy = spawnSync(

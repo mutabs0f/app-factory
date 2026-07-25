@@ -206,7 +206,37 @@ for (const platform of deliveryTargets()) {
   record(`${platform === 'ios' ? 'iOS' : 'web'} bundle (expo export)`, r.ok, r.ok ? '' : tail(r.out));
 }
 // 5 — no secrets anywhere (before DB checks, so it can never be skipped by an earlier failure)
-{ const r = tryRun('node scripts/secret-scan.mjs'); record('secret scan', r.ok, r.ok ? '' : tail(r.out)); }
+{ const r = tryRun('node scripts/secret-scan.mjs'); record('secret scan (source)', r.ok, r.ok ? '' : tail(r.out)); }
+// 5b — and no secrets in the BUILT bundle. Source being clean does not prove the shipped
+// artifact is: a key can reach dist/ via app.config, a config plugin, or a dependency default.
+// This is the file that actually goes to his phone / the browser.
+{ const r = tryRun('node scripts/secret-scan.mjs --bundle'); record('secret scan (shipped bundle)', r.ok, r.ok ? '' : tail(r.out)); }
+// 5c — known-vulnerable dependencies.
+//
+// Threshold is CRITICAL, deliberately, and the check is named for that so a PASS is not
+// a lie. Reasoning, so nobody "helpfully" tightens it back: pinning Expo to SDK 54 is
+// forced (it is the last Expo Go build on the App Store — the only way an app reaches
+// the phone during development). SDK 54's own toolchain carries build-time advisories
+// whose only remedy is a major Expo bump, which would break that path entirely. Those
+// packages (postcss et al.) are build tooling and never reach the shipped bundle.
+// Failing on them would leave the gate permanently red, and a permanently red gate
+// trains everyone to ignore it — which hides the real finding when one arrives.
+// So: FAIL on critical, and PRINT the high/moderate counts on every run so they are
+// never invisible. Revisit when the SDK pin moves.
+{
+  const r = tryRun('npm audit --omit=dev --json');
+  let counts = null;
+  try {
+    counts = JSON.parse(r.out).metadata?.vulnerabilities ?? null;
+  } catch {
+    counts = null;
+  }
+  if (!counts) record('dependency audit (prod, critical)', false, `npm audit did not return parseable JSON:\n${tail(r.out, 8)}`);
+  else {
+    const summary = `critical ${counts.critical}, high ${counts.high}, moderate ${counts.moderate} (production deps)`;
+    record('dependency audit (prod, critical)', counts.critical === 0, counts.critical === 0 ? summary : `${summary} — fix the critical one(s): npm audit --omit=dev`);
+  }
+}
 // 6 — every OR-decision resolved to one choice (anti-malaki; docs-only, so it always runs)
 checkDecisionsResolved();
 // 7 — required API keys present (PRESENCE only, never values; per config/integrations.json).
@@ -325,12 +355,196 @@ if (reset.ok) {
           grantGaps.map((g) => `${g.tablename}.${g.op}`).join(', ') + ' — add matching GRANTs',
       );
     else record('table grants', true, 'grants match policy operations');
+
+    // The ONE opt-out shared by the anon and isolation checks: a table genuinely meant to be
+    // world-readable declares it in its own migration. This is a self-issued exemption, so it
+    // is deliberately noisy — it lives in committed SQL where a human reviewing the diff sees
+    // it, and every exempted table is named in the gate output below.
+    const PUBLIC_MARK = '-- public-table: intentionally readable by everyone';
+    const migrationText = (() => {
+      try {
+        const dir = join(TEMPLATE, 'supabase', 'migrations');
+        return readdirSync(dir).filter((f) => f.endsWith('.sql'))
+          .map((f) => readFileSync(join(dir, f), 'utf8')).join('\n');
+      } catch { return ''; }
+    })();
+    const intentionallyPublic = new Set(
+      migrationText.split('\n')
+        .filter((l) => l.includes(PUBLIC_MARK))
+        .map((l) => (l.match(/public-table:\s*intentionally readable by everyone\s*\((\w+)\)/) || [])[1])
+        .filter(Boolean),
+    );
+    if (intentionallyPublic.size)
+      console.log(`  note: table(s) declared world-readable by their migration: ${[...intentionallyPublic].join(', ')}`);
+
+    // ANON REACHABILITY — the exact shape of the Lovable CVE-2025-48757 class of leak.
+    // The publishable key ships in the client BY DESIGN, so `anon` is the attacker's role.
+    // Above we check that `authenticated` HAS the grants its policies need; nothing checked
+    // that `anon` does NOT have grants it shouldn't. RLS default-deny does most of the work,
+    // but a stray GRANT ... TO anon plus any permissive policy is a public database.
+    const { rows: anonGrants } = await client.query(`
+      select c.relname as table_name, p.priv
+      from pg_class c
+      join pg_namespace n on n.oid = c.relnamespace
+      cross join lateral (values ('SELECT'),('INSERT'),('UPDATE'),('DELETE')) as p(priv)
+      where n.nspname = 'public' and c.relkind = 'r'
+        and has_table_privilege('anon', c.oid, p.priv)
+      order by 1,2;`);
+    // The same explicit opt-out the isolation check uses — a table meant to be world-readable
+    // must say so in its migration. (Earlier this message offered an escape hatch that was
+    // not actually implemented, which would have made the check unfixable for a public table.)
+    const anonLeaks = anonGrants.filter((g) => !intentionallyPublic.has(g.table_name));
+    if (anonLeaks.length)
+      record(
+        'anon has no table grants',
+        false,
+        'the ANONYMOUS role can reach: ' +
+          anonLeaks.map((g) => `${g.table_name}.${g.priv}`).join(', ') +
+          ` — the publishable key ships inside the app, so this is public to anyone who downloads it.` +
+          ` Revoke it, or if the table is genuinely meant to be world-readable add "${PUBLIC_MARK} (<table>)" to its migration.`,
+      );
+    else record('anon has no table grants', true, 'anonymous role cannot reach any app table');
+
+    // A policy that reads user_metadata is user-editable privilege escalation: a user updates
+    // their own JWT metadata and grants themselves whatever the policy checks for. This was
+    // prose-only in db-guard/review, i.e. it depended on a subagent noticing.
+    const { rows: meta } = await client.query(`
+      select pp.tablename, pp.policyname
+      from pg_policies pp
+      where pp.schemaname = 'public'
+        and (coalesce(pp.qual,'') || ' ' || coalesce(pp.with_check,'')) ilike '%user_metadata%';`);
+    if (meta.length)
+      record(
+        'no user-editable claims in policies',
+        false,
+        'policy reads user_metadata (the user can edit it and escalate): ' +
+          meta.map((m) => `${m.tablename}.${m.policyname}`).join(', ') +
+          ' — use app_metadata or a server-side table instead',
+      );
+    else record('no user-editable claims in policies', true, 'no policy trusts user-editable claims');
+
+    // Storage: every query above is scoped to the `public` schema, so buckets were entirely
+    // out of scope. A public bucket is the single most common real-world data leak in this
+    // stack, and the default when a bucket is created carelessly.
+    try {
+      const { rows: buckets } = await client.query(`select name, public from storage.buckets;`);
+      const open = buckets.filter((b) => b.public);
+      if (open.length)
+        record('storage buckets private', false, 'PUBLIC bucket(s): ' + open.map((b) => b.name).join(', ') + ' — anyone with the URL can read every object');
+      else record('storage buckets private', true, buckets.length ? `${buckets.length} bucket(s), none public` : 'no storage buckets');
+    } catch (e) {
+      // Only "the storage schema isn't installed" is a legitimate pass. Any OTHER error
+      // (permissions, timeout, syntax) means the check DID NOT RUN — and a check that did
+      // not run is a failure, never a green. An earlier version swallowed every error as PASS.
+      const missing = /does not exist|undefined table|unknown relation/i.test(e.message || '');
+      record(
+        'storage buckets private',
+        missing,
+        missing ? 'storage schema not present (app uses no file storage)' : `check did not run: ${e.message}`,
+      );
+    }
+
+    // ISOLATION — the check that actually matters. Everything above proves RLS is
+    // switched ON and wired; none of it proves a policy SEPARATES one user from another.
+    // A policy of `using (is_active)` passes every earlier check and leaks the whole table.
+    //
+    // Two layers, because neither alone is sufficient:
+    //   (a) static  — every policy must actually reference the caller's identity
+    //                 (auth.uid() / auth.jwt() / current_setting('request.jwt...')).
+    //                 A policy that mentions none of them cannot be isolating anyone.
+    //   (b) runtime — where seed data exists, impersonate a RANDOM authenticated user and
+    //                 confirm they cannot see every row. This is real proof, not inference.
+    const { rows: weak } = await client.query(`
+      select pp.tablename, pp.policyname,
+             coalesce(pp.qual,'') || ' ' || coalesce(pp.with_check,'') as expr
+      from pg_policies pp
+      where pp.schemaname = 'public';`);
+    // NB: auth.role() is deliberately NOT accepted here. `using (auth.role() = 'authenticated')`
+    // is the classic near-miss: it proves someone is signed in, but every signed-in user then
+    // sees every row. Only expressions that bind to WHICH user it is count as isolation.
+    const noIdentity = weak.filter(
+      (p) =>
+        !/auth\.uid\(\)|auth\.jwt\(\)|request\.jwt\.claim/i.test(p.expr) &&
+        !intentionallyPublic.has(p.tablename),
+    );
+    if (noIdentity.length)
+      record(
+        'RLS isolation (policy references caller)',
+        false,
+        'policy does not reference the caller identity, so it cannot isolate users: ' +
+          noIdentity.map((p) => `${p.tablename}.${p.policyname}`).join(', ') +
+          `. Use auth.uid(), or mark the table "${PUBLIC_MARK} (<table>)" in its migration if it is meant to be world-readable.`,
+      );
+    else record('RLS isolation (policy references caller)', true, `${weak.length} policy/policies bind to the caller`);
+
+    // Runtime probe — only meaningful where rows exist (seed.sql). Reported honestly as
+    // "no data" rather than passed silently when there is nothing to prove.
+    // Count rows visible to a specific signed-in user. The role switch and the JWT claim
+    // MUST be separate statements in one transaction — an earlier version set both inside a
+    // FROM-clause subquery, which does not apply before the scan: it reported a stranger
+    // seeing every row as a PASS. Verified empirically (stranger 2/2 before, 0/2 after).
+    const STRANGER = '00000000-0000-0000-0000-0000000000ff';
+    async function visibleTo(ident, sub) {
+      const claims = JSON.stringify({ sub, role: 'authenticated' }).replace(/'/g, "''");
+      if (client.mode === 'local') {
+        await client.query('begin');
+        try {
+          await client.query('set local role authenticated');
+          await client.query(`select set_config('request.jwt.claims','${claims}', true)`);
+          const r = await client.query(`select count(*)::int as n from ${ident};`);
+          return r.rows[0].n;
+        } finally {
+          await client.query('rollback');
+        }
+      }
+      // Cloud: each API call is its own session, so the whole thing goes as one batch.
+      // The endpoint returns the LAST statement's rows (verified).
+      const r = await client.query(
+        `begin; set local role authenticated;` +
+          ` select set_config('request.jwt.claims','${claims}', true);` +
+          ` select count(*)::int as n from ${ident}; rollback;`,
+      );
+      const n = Array.isArray(r.rows) && r.rows.length ? r.rows[r.rows.length - 1].n : null;
+      if (n === null || n === undefined) throw new Error('probe returned no count');
+      return Number(n);
+    }
+
+    try {
+      const probed = [];
+      for (const t of rows) {
+        if (intentionallyPublic.has(t.table_name)) continue;
+        const ident = `public."${t.table_name.replace(/"/g, '""')}"`;
+        const { rows: tot } = await client.query(`select count(*)::int as n from ${ident};`);
+        if (!tot[0].n) continue;
+        probed.push({ table: t.table_name, total: tot[0].n, visible: await visibleTo(ident, STRANGER) });
+      }
+      const leaks = probed.filter((p) => p.visible >= p.total && p.total > 0);
+      if (leaks.length)
+        record(
+          'RLS isolation (runtime probe)',
+          false,
+          'a random signed-in user can see EVERY row of: ' +
+            leaks.map((l) => `${l.table} (${l.visible}/${l.total})`).join(', '),
+        );
+      else if (!probed.length)
+        record('RLS isolation (runtime probe)', true, 'no seed rows to probe — static check above is the binding one');
+      else
+        record('RLS isolation (runtime probe)', true,
+          probed.map((p) => `${p.table} ${p.visible}/${p.total} visible to a stranger`).join('; '));
+    } catch (e) {
+      record('RLS isolation (runtime probe)', false, `probe failed: ${e.message}`);
+    }
   } catch (e) {
     // Fail EVERY db-dependent check, not just the first — a check that silently
     // vanishes from the report reads as "not a problem" instead of "never ran".
     record('RLS coverage', false, `DB query failed: ${e.message}`);
     record('definer fn exposure', false, 'not run — DB query failed');
     record('table grants', false, 'not run — DB query failed');
+    record('anon has no table grants', false, 'not run — DB query failed');
+    record('no user-editable claims in policies', false, 'not run — DB query failed');
+    record('storage buckets private', false, 'not run — DB query failed');
+    record('RLS isolation (policy references caller)', false, 'not run — DB query failed');
+    record('RLS isolation (runtime probe)', false, 'not run — DB query failed');
   } finally {
     await client.end();
   }
@@ -380,6 +594,11 @@ if (reset.ok) {
   record('RLS coverage', false, 'not run — migration replay failed');
   record('definer fn exposure', false, 'not run — migration replay failed');
   record('table grants', false, 'not run — migration replay failed');
+  record('anon has no table grants', false, 'not run — migration replay failed');
+  record('no user-editable claims in policies', false, 'not run — migration replay failed');
+  record('storage buckets private', false, 'not run — migration replay failed');
+  record('RLS isolation (policy references caller)', false, 'not run — migration replay failed');
+  record('RLS isolation (runtime probe)', false, 'not run — migration replay failed');
   record('types freshness', false, 'not run — migration replay failed');
 }
 

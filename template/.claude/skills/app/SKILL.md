@@ -13,22 +13,27 @@ that there are seven stages. This skill runs them for him.
 the need for him to *type* them. It grants **no** licence to skip a gate, soften a check, or report
 a stage done without its evidence.
 
-## The three times you stop
+## The four times you stop
 
 Everything else is yours. Stop, ask, and **wait** at exactly these points:
 
-1. **The integrations table** (in `/new-app`) — which external services the app will use. His call,
-   never yours. He can strike or add rows.
-2. **The phone preview** (`/preview`) — he walks the screens and reacts. His verbatim words go in
+1. **The brief** (`/discuss`) — he agrees you understood the idea before anything is built.
+2. **The integrations table** (`/research-apis`, confirmed in `/new-app`) — which external services
+   the app will use, researched and **obtainability-checked**. His call, never yours.
+3. **The phone preview** (`/preview`) — he walks the screens and reacts. His verbatim words go in
    `docs/REVIEW-LOG.md`. Your opinion of the screens is not a substitute.
-3. **Ship** (`/ship`) — he approves before anything is published or installed.
+4. **Ship** (`/ship`) — he approves before anything is published or installed.
 
 The key form (`node scripts/collect-keys.mjs`) is not a stop *you* manage — run it in the
 foreground and wait for it, as `/new-app` says.
 
 ## The run order
 
-    S1  /new-app        → SPEC + schema + DECISIONS + integrations table [STOP] + key form
+    S0  /discuss        → talk the idea through, propose don't interrogate → docs/BRIEF.md  [STOP]
+        /research-apis  → find what services this app actually needs, CHECK HE CAN GET THEM,
+                          → integrations table + config/integrations.json  [STOP — his approval]
+    S1  /new-app        → SPEC + schema + DECISIONS (consuming the brief + approved integrations;
+                          do NOT re-ask what /discuss already settled) + the key form
                           → hands him design/DESIGN-BRIEF.md for Claude Design
     S2  /design-import  → when his design zip lands in design/input/  (skip if he has no design:
                           scaffold plainly from the SPEC screen list and SAY that you did)
@@ -36,6 +41,9 @@ foreground and wait for it, as `/new-app` says.
     S3  /build          → wire it up under a /goal loop until scripts/verify.mjs exits 0
     S4  /review         → fresh-context reviewer + /code-review + the security gate
     S5  /ship           → IPA via CI, or the live URL  [STOP — his approval]
+
+**`/discuss` and `/research-apis` run FIRST and are not optional.** Skipping to `/new-app` is what
+produced an app whose only data source turned out to be unobtainable, after the schema was written.
 
 Between stages: **commit**. A stage that produced artifacts and did not commit them has not
 finished (provider-scout's entire S1 sat uncommitted for 10 days — don't repeat that).
