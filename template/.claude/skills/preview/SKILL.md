@@ -5,6 +5,11 @@ description: Serve the app over an Expo tunnel and get the exp:// URL to Basim s
 
 # /preview — S2 PREVIEW (human gate #1)
 
+> **Before you do anything in this stage:**  `node scripts/stage-guard.mjs --enter preview`
+> It refuses if the prerequisites are unmet or you are not inside an app repo — both
+> real failures that have happened. When the stage is finished:
+> `node scripts/stage-guard.mjs --complete preview`
+
 Put the real app in Basim's hand over Expo Go. This is the review that matters — it replaces the old pipeline's checklist approvals. **The output is his verbatim reaction, not your assessment.**
 
 ## Before you start

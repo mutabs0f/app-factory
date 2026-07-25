@@ -5,6 +5,11 @@ description: Turn a one-line idea into the app's SPEC, schema migration, and res
 
 # /new-app — S1 SPEC (idea → spec + schema + decisions)
 
+> **Before you do anything in this stage:**  `node scripts/stage-guard.mjs --enter new-app`
+> It refuses if the prerequisites are unmet or you are not inside an app repo — both
+> real failures that have happened. When the stage is finished:
+> `node scripts/stage-guard.mjs --complete new-app`
+
 Turn `/new-app <idea>` into three committed artifacts — a one-page SPEC, the schema migration(s), and every "OR" resolved in DECISIONS — then prove the schema is clean. This is the anti-spaghetti gate: nothing ambiguous reaches DESIGN or BUILD.
 
 ## Before you start

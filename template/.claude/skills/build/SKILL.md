@@ -5,6 +5,11 @@ description: Wire screens to Supabase under a /goal loop whose only exit is `nod
 
 # /build — S3 BUILD (the goal loop)
 
+> **Before you do anything in this stage:**  `node scripts/stage-guard.mjs --enter build`
+> It refuses if the prerequisites are unmet or you are not inside an app repo — both
+> real failures that have happened. When the stage is finished:
+> `node scripts/stage-guard.mjs --complete build`
+
 Wire the app's screens to Supabase (per-feature `api.ts` + `hooks.ts`, generated types, RLS-backed queries) until the deterministic gate is green.
 
 ## Before you start

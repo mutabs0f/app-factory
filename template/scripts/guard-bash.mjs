@@ -52,6 +52,7 @@ const GATE_FILES = [
   'scripts/secret-scan.mjs', // source + shipped-bundle secret scanning
   'scripts/collect-keys.mjs', // env-complete, and the secret-refusal rails
   'scripts/lib/dbclient.mjs', // EVERY database check flows through this
+  'scripts/stage-guard.mjs', // the stage controller: gate order + human approvals
 ];
 const SECRET_FILE = join(homedir(), '.app-factory-gate-secret');
 
@@ -187,7 +188,8 @@ if (toolName === 'Bash' || toolInput.command) {
   // path-qualified, so a legitimate .expo/.vscode/settings.json write is not blocked.
   const gateName =
     '(?:verify\\.mjs|guard-bash\\.mjs|guard-run\\.mjs|arch-check\\.mjs|runtime-check\\.mjs' +
-    '|secret-scan\\.mjs|collect-keys\\.mjs|dbclient\\.mjs|\\.claude[\\\\/]settings\\.json|\\.verify-pass)';
+    '|secret-scan\\.mjs|collect-keys\\.mjs|dbclient\\.mjs|stage-guard\\.mjs' +
+    '|\\.claude[\\\\/]settings\\.json|\\.verify-pass)';
   const redirWrite = new RegExp(
     `(?:>>?|\\btee\\b|Set-Content|Out-File|Add-Content|\\bsc\\b|\\bac\\b|sed\\s+-i)[^;&|]*${gateName}`,
     'i',

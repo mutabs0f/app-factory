@@ -5,6 +5,11 @@ description: Work out which external services an app actually needs, verify Basi
 
 # /research-apis — find what it needs, and what he can actually get
 
+> **Before you do anything in this stage:**  `node scripts/stage-guard.mjs --enter research-apis`
+> It refuses if the prerequisites are unmet or you are not inside an app repo — both
+> real failures that have happened. When the stage is finished:
+> `node scripts/stage-guard.mjs --complete research-apis`
+
 Two jobs, and the second is the one that matters:
 
 1. Work out which external services this app genuinely needs.

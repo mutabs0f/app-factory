@@ -5,6 +5,11 @@ description: Cut the release and put the real app on Basim's phone — human gat
 
 # /ship — S5 SHIP (human gate #2)
 
+> **Before you do anything in this stage:**  `node scripts/stage-guard.mjs --enter ship`
+> It refuses if the prerequisites are unmet or you are not inside an app repo — both
+> real failures that have happened. When the stage is finished:
+> `node scripts/stage-guard.mjs --complete ship`
+
 Turn a green tree into a running app on Basim's phone. `/ship --dry-run` prints the plan and stops — no tag, no build.
 
 ## Before you start

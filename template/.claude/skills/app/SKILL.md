@@ -5,6 +5,31 @@ description: Drive a whole app from one line — runs the S1→S5 factory stages
 
 # /app — the whole factory in one command
 
+## STEP ZERO — run this before anything else, every time
+
+```
+node scripts/stage-guard.mjs --status
+```
+
+It prints where this app actually is: which stages are done, which are locked and why, which
+human gates have been approved, and whether the gate has EVER gone green here. If it halts
+because you are not inside an app repo, **stop and say so** — do not improvise.
+
+Then, before each stage, `--enter` it; after each stage, `--complete` it; after Basim says yes
+at a gate, `--approve` it:
+
+```
+node scripts/stage-guard.mjs --enter research-apis
+node scripts/stage-guard.mjs --complete discuss
+node scripts/stage-guard.mjs --approve brief
+```
+
+**This is not bookkeeping — it is the control flow.** `--enter` refuses when prerequisites are
+unmet, and `--complete build` refuses without a green gate. The first real run of this factory
+(spending-compass) skipped every stage, approved no gate, never ran verify.mjs once, and
+nothing noticed, because the stage order lived only in prose like this paragraph. The guard is
+what makes it real. Never work around it; if it blocks you, it is telling you something true.
+
 Basim's words: *"I give the idea and the design, and it gets built."* He should not have to know
 that there are seven stages. This skill runs them for him.
 

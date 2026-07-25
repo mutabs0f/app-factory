@@ -5,6 +5,11 @@ description: Translate whatever Basim dropped in design/input/ (JSX/HTML, screen
 
 # /design-import — S2 DESIGN (faithful translation)
 
+> **Before you do anything in this stage:**  `node scripts/stage-guard.mjs --enter design-import`
+> It refuses if the prerequisites are unmet or you are not inside an app repo — both
+> real failures that have happened. When the stage is finished:
+> `node scripts/stage-guard.mjs --complete design-import`
+
 You are a **translator, not a designer.** Reproduce the input as given — layout, spacing, colors, copy, order. **Zero "improvements."** Every screen is scaffolded with MOCK data; **no Supabase wiring** here (that is S3 `/build`).
 
 ## Before you start

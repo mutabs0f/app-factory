@@ -5,6 +5,11 @@ description: Talk the app idea through with Basim until it is sharp enough to bu
 
 # /discuss — think the idea through WITH him
 
+> **Before you do anything in this stage:**  `node scripts/stage-guard.mjs --enter discuss`
+> It refuses if the prerequisites are unmet or you are not inside an app repo — both
+> real failures that have happened. When the stage is finished:
+> `node scripts/stage-guard.mjs --complete discuss`
+
 The old flow asked five questions and started building. Basim asked for the opposite: *"it will
 analyze and discuss with me."* This is that stage. There is **no question limit** — but there is a
 hard rule about the shape of the conversation.

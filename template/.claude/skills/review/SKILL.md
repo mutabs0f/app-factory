@@ -5,6 +5,11 @@ description: Fresh-context review of the build diff — spawn the code-reviewer 
 
 # /review — S4 REVIEW (fresh context)
 
+> **Before you do anything in this stage:**  `node scripts/stage-guard.mjs --enter review`
+> It refuses if the prerequisites are unmet or you are not inside an app repo — both
+> real failures that have happened. When the stage is finished:
+> `node scripts/stage-guard.mjs --complete review`
+
 Fresh eyes on the build before it ships. Zero Basim time until a decision actually needs him. Two independent review passes + the executed security gate, every finding triaged and logged to disk.
 
 ## Before you start
