@@ -32,7 +32,21 @@ This repo builds a mobile app on **Expo SDK 54 + Supabase** (thin-client model).
 7. A new external secret ⇒ a new Edge Function. Never a key in the app.
 
 ## The gate — `node scripts/verify.mjs`
-Runs: typecheck · lint · jest · `expo export` · secret scan · `supabase db reset` + RLS coverage + definer-fn exposure + table GRANTs · generated-types freshness. Requires `supabase start` running (Docker). Exit 0 is the only "done".
+**21 checks** (22 when DECISIONS resolves Delivery to PWA — the web bundle is checked too).
+Code: typecheck · lint · jest · **architecture** (import boundaries, feature encapsulation, no
+cycles) · delivery bundle builds · **the app actually runs** (`runtime-check.mjs` serves the web
+build and walks every route in a browser: content mounted, zero console errors, zero failed
+requests) · secret scan of source · secret scan of the **shipped bundle** · dependency audit
+(fails on CRITICAL only — see the note in verify.mjs) · every DECISIONS "X or Y" resolved ·
+required keys present.
+Database: migration replay from zero · RLS coverage · definer-fn exposure · table GRANTs ·
+**anon-role reachability** · no user-editable claims in policies · storage buckets private ·
+**RLS cross-user isolation** (static + a runtime impersonation probe) · generated-types freshness.
+
+**Docker is optional.** The DB half runs against the local stack (`supabase start`) OR a cloud dev
+project via the Management API — needs `$SUPABASE_ACCESS_TOKEN` and a ref in `.dev-branch`. Force
+either with `--db=local|cloud`. If NEITHER is available the DB checks **fail**; they are never
+skipped green. Exit 0 is the only "done".
 
 ## Gate integrity (do not weaken)
 - **Never edit `scripts/verify.mjs`, `scripts/guard-bash.mjs`, `scripts/guard-run.mjs`, or `.claude/settings.json`** (the deterministic gate + its hooks) without Basim's explicit approval. A PreToolUse hook flags such edits and blocks shell writes/copies/moves/deletes to them — and to the `.verify-pass` marker, which only `verify.mjs` may write. Do not route around it. Weakening a check to make it pass is the cardinal sin of this project.

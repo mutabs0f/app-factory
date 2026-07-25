@@ -1,245 +1,285 @@
-# External review prompt — paste this into the reviewing model
+# External review prompt — paste everything below the divider
+
+*(Every factual claim below was fact-checked against the repo before publishing. Where a control is
+narrower than it sounds, the narrow version is what is written.)*
 
 ---
 
 I want you to critically assess an agentic software-development system I own. Be rigorous and
 adversarial. I am not looking for encouragement — I am looking for the failure modes I cannot see.
-If something is well built, say so briefly and move on; spend your effort on what is wrong, risky,
-or missing.
+Where something is well built, say so in one line and move on; spend your effort on what is wrong,
+risky, or missing.
 
-**The entire system is public. Read it before judging it:**
+**The entire system is public. Read the code before judging it:**
 https://github.com/mutabs0f/app-factory
-(On my machine it lives at `C:\Users\Thinkpad\Agents\app-factory\`. Every app I build is a full
-clone of `template/` into a sibling directory, e.g. `C:\Users\Thinkpad\Agents\<app-slug>\`, so the
-whole agentic system travels with each app rather than living in one shared place.)
 
-## Directory map
-
-```
-app-factory/
-├── scaffolder/
-│   ├── SKILL.md                    the /new-app-project entry point I type
-│   └── scaffold.mjs                deterministic clone+rename+git-init (no LLM in the loop)
-├── scripts/                        the FACTORY's own tooling (not shipped into apps)
-│   ├── doctor.mjs                  environment preflight; reports which DB mode the gate would use
-│   ├── factory-eval.mjs            golden probe: scaffolds a throwaway app and asserts the
-│   │                               machinery is intact (currently 47 assertions)
-│   └── run-metrics.mjs
-├── office/                         a 3D "watch the agents work" viewer — cosmetic, ignore it
-└── template/                       ← THE PRODUCT. Every app is a clone of this.
-    ├── CLAUDE.md                   the operating rules every stage reads first
-    ├── AGENTS.md · LESSONS.md      conventions; accumulated failure→fix lessons
-    ├── .claude/
-    │   ├── settings.json           hooks (PostToolUse secret scan, PreToolUse gate guard) + model pin
-    │   ├── skills/                 THE STAGES (each a markdown behaviour spec)
-    │   │   ├── discuss/            talk the idea through — propose, don't interrogate
-    │   │   ├── research-apis/      find services AND verify I can obtain them
-    │   │   ├── new-app/            spec + schema + decisions + the key form
-    │   │   ├── design-import/      import a design I made elsewhere, faithfully
-    │   │   ├── preview/            get it onto my phone / a link
-    │   │   ├── build/              the loop whose only exit is a green gate
-    │   │   ├── verify-app/         the manual on-device pass
-    │   │   ├── review/             fresh-context review + security gate
-    │   │   ├── ship/               IPA via CI, or deploy the PWA
-    │   │   ├── app/                runs the whole sequence; stops at 4 human gates
-    │   │   └── undo/               restore a working version, non-destructively
-    │   └── agents/                 THE SPECIALISTS (subagents, fresh context)
-    │       ├── api-designer.md       where each operation lives + its contract
-    │       ├── backend-engineer.md   schema, constraints, indexes, RLS correctness, query cost
-    │       ├── frontend-engineer.md  screen architecture, the 4 states, RTL, a11y, perceived speed
-    │       ├── code-reviewer.md      reviews the diff; did NOT write the code; read-only
-    │       ├── db-guard.md           reviews each migration against the canonical RLS+GRANT pattern
-    │       └── advisor.md            consulted only when stuck (different model, on purpose)
-    ├── scripts/                    THE DETERMINISTIC HALF — shipped into every app
-    │   ├── verify.mjs              ★ THE GATE. 19 checks. Exit 0 is the only definition of done.
-    │   ├── lib/dbclient.mjs        one SQL interface, two backends (local Docker | cloud Mgmt API)
-    │   ├── secret-scan.mjs         scans source AND (--bundle) the shipped artifact
-    │   ├── collect-keys.mjs        the 127.0.0.1 one-time-token key form; refuses secrets into app files
-    │   ├── guard-bash.mjs          PreToolUse guard: blocks gate edits + non-dev DB writes
-    │   ├── guard-run.mjs           fail-closed launcher for the guard
-    │   ├── new-migration.mjs       scaffolds a migration pre-filled with the RLS+GRANT pattern
-    │   ├── deploy-web.mjs          export → deploy → GET the URL and require 2xx before reporting
-    │   ├── design-brief.mjs        generates the design prompt I paste elsewhere
-    │   └── design-import.mjs       validates + reconciles the returned design against the spec
-    ├── supabase/
-    │   ├── migrations/             the ONLY source of schema truth
-    │   ├── seed.sql · config.toml
-    ├── src/
-    │   ├── app/                    routes ONLY — each a thin re-export of a feature screen
-    │   │   ├── (auth)/sign-in · verify-otp
-    │   │   └── (app)/index · settings
-    │   ├── features/               auth · profile · home  (each: api.ts, hooks.ts, screens, tests)
-    │   ├── lib/                    supabase.ts · auth.tsx · storage.ts (encrypted session store)
-    │   └── types/database.types.ts generated FROM the schema; drift fails the gate
-    ├── config/integrations.json    approved services — names/formats only, NEVER values
-    ├── docs/                       SPEC · DECISIONS · REVIEW-LOG · OBTAINABLE-SERVICES
-    ├── .github/workflows/ios-build.yml   unsigned-IPA build on a macOS runner
-    ├── .dev-branch                 allowlist of DB refs the agent may write to (fail-closed)
-    └── .env                        gitignored, never committed; written only by the key form
-```
-
-The files most worth your time, in order: `template/scripts/verify.mjs` (the gate — the whole
-doctrine lives here), `template/CLAUDE.md` (the rules), `template/.claude/skills/build/SKILL.md`
-(the loop), `template/.claude/agents/*.md` (the specialists), and
-`template/scripts/guard-bash.mjs` (the anti-tamper story).
+On my machine it lives at `C:\Users\Thinkpad\Agents\app-factory\`. Every app I build is a **full
+clone** of `template/` into a sibling directory (`C:\Users\Thinkpad\Agents\<app-slug>\`), so the
+whole agentic system travels per-app rather than living centrally. That is a deliberate design
+choice and one of the things I want judged.
 
 ## Who I am and what I am trying to do
 
-I am **not a developer**. I do not read stack traces, and I do not want to edit config files. My
-goal is: **I describe an app I want, and the system builds it well enough that I can actually use
-it on my iPhone.** I judge the result by using it, not by reading its code.
+I am **not a developer**. I do not read stack traces and I do not want to edit config files. My
+goal: **I describe an app, and the system builds it well enough that I actually use it on my
+iPhone.** I judge the result by using it, not by reading its code.
 
-My constraints are hard and they shape everything:
+My constraints are hard and they shape every decision:
 
-- **Windows 11 PC, no Mac, ever.**
-- **No Apple Developer account.** My application was rejected and cannot be reopened. So: no
-  TestFlight, no App Store, no paid signing certificates, no EAS device builds.
-- **I am in Saudi Arabia.** This blocks services people normally assume: Google Cloud (including
-  Maps Platform) requires purchasing through an exclusive local reseller whose individual
-  onboarding has been closed since ~Feb 2025, so I cannot get a Google API key at all. SMS/OTP
-  providers require a company registration I do not have.
-- The apps are **personal** — usually just me, sometimes a handful of people. Not a startup, not
-  a product, no compliance regime.
+- **Windows 11, no Mac, ever.**
+- **No Apple Developer account** — my application was rejected and cannot be reopened. No
+  TestFlight, no App Store, no paid signing, no EAS device builds.
+- **I am in Saudi Arabia.** Google Cloud (including Maps Platform) must be purchased through an
+  exclusive local reseller whose individual onboarding has been closed since ~Feb 2025 — so I
+  cannot obtain a Google API key at all. SMS/OTP providers require a company registration I do not
+  have. One real app is parked because of exactly this.
+- The apps are **personal** — usually just me, sometimes a handful of people. No compliance regime.
 
-What I asked for most recently, and want you to judge against: **the system should handle backend,
-frontend and API design — all of them excellently** — rather than one general-purpose agent writing
-every layer shallowly. I referenced Replit as a quality bar, but I do not want Replit's web-app
-product; I want that level of engineering competence aimed at apps I install on my phone.
+What I asked for most recently, and want judged: **the system should handle backend, frontend and
+API design — all of them excellently** — rather than one general-purpose agent writing every layer
+shallowly.
 
 ## What has been built
 
 **Stack (fixed, no alternatives):** Expo SDK 54 + Supabase. TypeScript strict, expo-router.
-Postgres Row-Level Security is the only authorization layer; the client is untrusted. Auth is
-email OTP via custom SMTP. There is deliberately **no custom backend server** — the client talks to
-Supabase directly, with Postgres RPC functions for anything that must be atomic and Edge Functions
-only for third-party secrets or server-authoritative logic. Expo is pinned to SDK 54 because that
-is the last Expo Go build available on the App Store, and Expo Go is how I preview apps on my
+Postgres Row-Level Security is the **only** authorization layer; the client is untrusted and ships
+a public key. Auth is email OTP via custom SMTP. There is deliberately **no custom backend server** —
+the client talks to Supabase directly, with Postgres RPC functions for anything that must be atomic
+and Edge Functions only for third-party secrets or server-authoritative logic. Expo is pinned to
+SDK 54 because that is the last Expo Go build on the App Store, and Expo Go is how I preview on my
 phone.
 
-**Delivery, given no Apple account:** a GitHub Actions macOS runner builds an *unsigned* IPA
-(archiving with code signing disabled and packaging the `.app` into a `Payload/` zip), which I then
-sign on Windows with Sideloadly using a free Apple ID — this gives a real installed app that works
-for 7 days before needing a re-sign, with no push notifications (the free-account entitlement is
-stripped). The alternative path is a PWA added to the home screen.
+**Delivery with no Apple account:** a GitHub Actions macOS runner archives with code signing
+disabled and packages the `.app` into a `Payload/` zip to produce an **unsigned IPA**, which I sign
+on Windows with Sideloadly using a free Apple ID. Real installed app, 7-day expiry, no push (the
+entitlement is stripped). Alternative path: a PWA added to the home screen.
 
-**The core doctrine** — this is the part I care most about being judged:
+**The core doctrine — judge this hardest:**
 
 > A claim of "done" is a hint, never a verdict. The only verdict is `scripts/verify.mjs` exiting 0.
 > A missing result is a failure that halts — never something to paper over.
 
 This exists because the predecessor system fabricated its success signals: hardcoded PASS verdicts,
-auto-generated "complete" records for agents that had crashed, security checklists hardcoded to
-true. It shipped apps with broken auth and contract drift while reporting everything green.
+auto-generated "complete" records for agents that had crashed, security checklists hardcoded true.
+It shipped apps with broken auth and contract drift while reporting everything green.
 
-**The gate** (`template/scripts/verify.mjs`) — 19 checks, all deterministic, exit 0 or the work is
-not done: typecheck, lint, tests, `expo export` for the app's actual delivery target(s), secret
-scan of source **and of the shipped bundle**, dependency audit, a parser that fails the build if a
-design decision is still recorded as an unresolved "X or Y", API-key presence, full migration replay
-from zero, RLS coverage, SECURITY DEFINER exposure, table GRANTs matching policy operations,
-anonymous-role reachability, user-editable-claims-in-policies, storage bucket privacy, RLS
-cross-user isolation (both a static check that every policy binds to *which* user, and a runtime
-probe that impersonates a stranger and asserts they cannot see every row), and generated-type drift.
-It runs against local Supabase in Docker **or** against a cloud dev project via the Supabase
-Management API, so Docker is optional. If neither database is available, the DB checks FAIL — they
-are never skipped green.
+### The gate — `template/scripts/verify.mjs` (678 lines), 21 checks
 
-**Anti-tampering:** the pass marker is HMAC-signed with a per-machine secret stored outside the
-repo; PreToolUse hooks block edits to the gate scripts and to the hook config; database writes are
-restricted to a dev-project allowlist. Their own documentation admits these are "defense-in-depth
-speed bumps, not a sandbox".
+**21 for an iOS-delivery app; 22 when `DECISIONS.md` resolves Delivery to PWA** (a second bundle
+check is added). Code half: typecheck · lint · jest · **architecture** (import boundaries + cycle
+detection) · delivery bundle builds · **the app actually runs in a browser** · secret scan of
+source · secret scan of the **shipped bundle** · dependency audit · every DECISIONS "X or Y"
+resolved · required API keys present.
 
-**The agent architecture:** stages are Claude Code *skills* (markdown), and specialists are
-*subagents*:
-- Stages: `discuss` (talk the idea through — propose rather than interrogate), `research-apis`
-  (find what services the app needs **and verify I can actually obtain them**), `new-app` (spec,
-  schema, decisions), `design-import`, `preview`, `build` (a loop whose only exit is a green gate),
-  `review`, `ship`, plus `app` (runs the whole sequence) and `undo`.
-- Specialists (all on the top-tier model): `api-designer` (where each operation lives — direct
-  table access vs Postgres RPC vs Edge Function — and its contract), `backend-engineer` (schema,
-  constraints, indexes, RLS correctness, query cost), `frontend-engineer` (screen architecture,
-  loading/empty/error/content states, Arabic-RTL, accessibility, perceived speed). Plus
-  `code-reviewer` (fresh context, read-only), `db-guard` (reviews migrations), and `advisor`
-  (consulted only when stuck).
-- **Design/implement split:** specialists design, a single executor implements. This is deliberate
-  — the predecessor had 14 agents each writing their own half and the contracts drifted badly.
+Database half: full migration replay from zero · RLS coverage · SECURITY DEFINER exposure · table
+GRANTs matching policy operations · **anon-role reachability** · user-editable-claims-in-policies ·
+storage bucket privacy · **RLS cross-user isolation, two checks** (a static one that every policy
+binds to *which* user, plus a runtime probe that impersonates a stranger and asserts they cannot see
+every row) · generated-type drift.
 
-**Key handling:** I never edit a `.env` file. A local script serves a one-page form on 127.0.0.1
-behind a one-time token; it validates each key's shape, routes public config to `.env` and secret
-keys to server-side storage, and **physically refuses** a secret-shaped key from entering the app's
-files. Approved integrations are recorded by name only, never by value.
+Runs against local Supabase in Docker **or** a cloud dev project via the Supabase Management API.
+Cloud mode needs `$SUPABASE_ACCESS_TOKEN` **and** a project ref written into `.dev-branch` (which
+ships comments-only and is fail-closed) — so Docker is optional only after that setup. If neither
+database is available the DB checks **fail** — never skipped green.
 
-## What is actually proven versus merely built
+**Be precise about these three, because they sound broader than they are:**
 
-I want you to weigh these differently, so here is the honest split.
+- **The dependency audit fails on CRITICAL only.** High and moderate are printed on every run and
+  deliberately do not fail: the forced SDK 54 pin carries build-time advisories whose only fix is a
+  major Expo bump, which would break the Expo Go preview path entirely.
+- **The HMAC-signed pass marker gates exactly one thing** — Supabase MCP cloud writes. Nothing else
+  reads it. An unverified tree can still build and sideload an IPA.
+- **The PreToolUse guard protects 4 paths**: `verify.mjs`, `guard-bash.mjs`, `guard-run.mjs`,
+  `.claude/settings.json`. The *other* check implementations (`arch-check.mjs`, `runtime-check.mjs`,
+  `secret-scan.mjs`, `collect-keys.mjs`, `lib/dbclient.mjs`) are **not** protected, and between them
+  they implement 8 of the 21 checks. I want your view on whether that hole matters.
 
-**Proven by execution:** a real unsigned IPA exists and I verified its internal structure. The gate
-passes 19/19 in both database modes. The security checks were each demonstrated against a
-deliberately planted leak — a policy that mentions the user but still exposes every row, and a
-stray grant to the anonymous role, both of which the *previous* version of the gate passed as
-green.
+There is also a **PostToolUse hook that runs a secret scan after every Edit/Write**, independent of
+the gate.
 
-**Not proven:** **no app has ever gone from idea to my phone end to end.** Not once.
+### The agent architecture
 
-## Known gaps (do not just rediscover these — go past them)
+**Stages** (Claude Code skills, markdown): `discuss` (talk the idea through — propose, don't
+interrogate) → `research-apis` (find what services the app needs **and verify I can obtain them**)
+→ `new-app` (spec, schema, decisions, key form) → `design-import` → `preview` → `build` → `review`
+→ `ship`. Plus `app` (runs the whole sequence, stopping at 4 human gates) and `undo`. Two further
+skill directories are third-party Supabase agent-skills, not stages.
 
-1. **Nothing ever runs the app and observes it.** The gate proves the code compiles and the
-   database is sound; it proves nothing about whether the app works when tapped. This was
-   demonstrated concretely: a build passed the gate while rendering a blank white page (a stale
-   bundler cache had baked in undefined config). Fixed, but the class of failure is wide open.
-2. The Supabase security-advisor check is executed and self-reported by the agent, not by a script.
-3. Edge Functions have no scaffold, no template, and no gate coverage — yet the architecture makes
-   them the mandatory home for every third-party secret.
-4. No session time-box and no global sign-out — a lost phone's session renews indefinitely.
-5. No static analysis of application code beyond a standard linter.
-6. The specialists are prose charters. Nothing mechanically verifies that their designs are good.
-7. A table can be exempted from two security checks by a comment in its own migration — a
-   self-issued exemption.
-8. Preview/ship still require a manual step from me each time.
+**Subagents, fresh context:** `api-designer` (where each operation lives — direct table access vs
+Postgres RPC vs Edge Function — and its contract), `backend-engineer` (schema, constraints, indexes,
+RLS correctness, query cost), `frontend-engineer` (screen architecture, the four states every screen
+owes the user, Arabic/RTL, accessibility, perceived speed) — these three are pinned to Opus 5.
+`advisor` (consulted only when stuck) is pinned to a different model on purpose. `code-reviewer`
+(reviews the diff, did not write the code, read-only) and `db-guard` (reviews each migration)
+**inherit the session model rather than being pinned.**
+
+**Specialists design; a single executor implements.** Deliberate: the predecessor had 14 agents each
+writing their own half and the contracts drifted into two payment implementations and a
+client/server that disagreed about auth.
+
+**The build loop:** `/build` is documented to run under a `/goal` loop that exits only on a green
+gate, capped at 8 turns. **Be aware: `/goal` may not exist in my Claude Code install** — the skill
+itself says "if unavailable, re-run `/build` manually against the verify output." So the turn cap
+and the automatic re-invocation are, today, prose in a markdown file rather than an enforced
+mechanism. Judge accordingly.
+
+**Key handling:** I never edit `.env`. A local script serves a one-page form — **127.0.0.1 by
+default, with a `--lan` flag that binds all interfaces** so I can fill it in on my phone — behind a
+one-time token. It validates each key's shape and refuses a secret-shaped value from entering the
+app's files. For anything secret it **captures no value at all**: it shows the dashboard click-path
+and records only that I confirmed it, by name. Every key has an "I can't get this one yet" option;
+a deferred *required* key keeps the gate red on purpose.
+
+## Directory map
+
+```
+app-factory/
+├── scaffolder/scaffold.mjs         deterministic clone+rename+git-init (no LLM in the loop)
+├── scripts/                        the FACTORY's own tooling (not shipped into apps)
+│   ├── doctor.mjs                  environment preflight
+│   ├── factory-eval.mjs            golden probe: scaffolds a throwaway app, 49 assertions, green
+│   └── run-metrics.mjs             per-stage duration / edit counts / gate attempts (no tokens)
+├── office/                         a 3D "watch the agents work" viewer — cosmetic, ignore
+└── template/                       ← THE PRODUCT. Every app is a clone of this.
+    ├── CLAUDE.md                   operating rules every stage reads first
+    ├── LESSONS.md                  accumulated failure→fix lessons
+    ├── .claude/
+    │   ├── settings.json           hooks (PostToolUse secret scan, PreToolUse guard) + model pin
+    │   ├── skills/                 13 dirs: the 11 stages above + 2 third-party Supabase skills
+    │   └── agents/                 6 subagents (above)
+    ├── scripts/                    THE DETERMINISTIC HALF — shipped into every app
+    │   ├── verify.mjs              ★ THE GATE, 678 lines
+    │   ├── runtime-check.mjs       builds the WEB bundle, serves it, walks every route in Chromium
+    │   ├── arch-check.mjs          import boundaries, feature encapsulation, cycles (src/ only)
+    │   ├── lib/dbclient.mjs        one SQL interface, two backends (Docker | cloud Mgmt API)
+    │   ├── secret-scan.mjs         source, and --bundle for the shipped artifact
+    │   ├── collect-keys.mjs        the one-time-token key form
+    │   ├── guard-bash.mjs          PreToolUse guard (4 protected paths + dev-only DB writes)
+    │   ├── guard-run.mjs           fail-closed launcher — itself a protected gate file
+    │   └── new-migration.mjs · deploy-web.mjs · design-brief.mjs · design-import.mjs
+    ├── supabase/migrations/        the ONLY source of schema truth
+    ├── src/  app/ (routes only) · features/ · lib/ · components/ · constants/ · hooks/ ·
+    │         types/database.types.ts (generated from the schema; drift fails the gate)
+    ├── config/integrations.json    approved services — names/formats only, NEVER values
+    ├── docs/                       SPEC · DECISIONS · REVIEW-LOG · OBTAINABLE-SERVICES
+    └── .github/workflows/ios-build.yml   unsigned IPA + 5 of the gate's code checks
+```
+
+Most worth your time: `template/scripts/verify.mjs`, `template/scripts/arch-check.mjs`,
+`template/scripts/guard-bash.mjs`, `template/.claude/agents/*.md`,
+`template/.claude/skills/build/SKILL.md`.
+
+⚠️ **`template/CLAUDE.md` and `build/SKILL.md` contain a stale description of the gate** (they say
+9 checks and imply Docker is required). The code is authoritative; the drift is itself a finding and
+I would like it called out.
+
+## Proven versus merely built — weigh these differently
+
+**Demonstrated by execution** (but see the caveat below): a real unsigned IPA was produced and its
+structure verified — `Payload/<app>.app`, a 5.7 MB Mach-O binary, zero code-signature entries. The
+gate passes in both database modes. Each new security check was demonstrated against a
+**deliberately planted leak** — a policy that references the user but still exposes every row, and a
+stray `grant ... to anon` — both of which the *previous* version of the gate passed as green. The
+runtime check was proven by re-creating a real incident: a build that passed every other check while
+rendering a blank white page now exits 1.
+
+**The caveat, and treat it as a finding:** almost none of that is recorded in the repository. Two
+incidents survive as code comments in `verify.mjs` and `runtime-check.mjs`; the IPA verification and
+the planted-leak demonstrations exist only as my assertion. Nothing in `template/scripts/`
+(~2,600 lines across 12 files) has a regression fixture — not the gate, not `arch-check.mjs`, not
+the security checks whose proofs I just cited. If you cannot reproduce a claim, say so.
+
+**Not proven at all: no app has ever gone from idea to my phone end to end. Not once.**
+
+Also: **"the app actually runs" is web-only.** `runtime-check.mjs` builds and walks the *web*
+bundle. Nothing ever launches the iOS bundle, which is the primary deliverable. It asserts that each
+route mounts real content with zero console errors and zero failed requests; it does **not** log in,
+and it does **not** assert where a protected route redirects to.
+
+## A previous review already found this — do not just repeat it
+
+An earlier assessment concluded the system was *"anti-spaghetti by instruction, but not yet
+anti-spaghetti by enforcement"* — the architectural rules lived in prose, eslint ignored `scripts/`,
+nothing checked import cycles or dependency direction, and CI never re-ran anything. That was
+correct. Since then: `arch-check.mjs` makes the boundary rules mechanical (proven against planted
+violations including a two-file cycle), the iOS workflow now runs five of the gate's code checks
+before spending macOS minutes, and the reference screen was fixed to actually demonstrate the four
+states its own specialist charter demands.
+
+**I want findings that go past that review, not a re-run of it.**
+
+## Known remaining gaps — go beyond these too
+
+1. **Test coverage is ~9%** (24 source files + 2 test files). No screen, navigation or
+   session-storage tests. No threshold, and `package.json` sets no `collectCoverageFrom`, so that
+   number came from a one-off command-line measurement rather than a repeatable config.
+2. **No template versioning or upgrade path.** Every app is an independent clone with its own git
+   history, so today's fixes reach *new* apps only. Existing apps were updated by hand.
+3. **The API specialist's contract is not persisted** as a committed artifact, so a later agent can
+   reinterpret it from a thin SPEC.
+4. **Migrations have no checksums**, and nothing tests old-client compatibility (sideloaded builds
+   are not auto-updated, so an old client stays live for weeks).
+5. **Nothing in `scripts/` has a regression test, and the whole directory is unlinted** —
+   `eslint.config.js` ignores `scripts/*`, and `arch-check.mjs` only walks `src/`. The deterministic
+   half of the system is outside both of its own quality checks.
+6. **The runtime check does not log in**, does not assert redirect targets, and never touches iOS.
+7. **Supabase's security advisor is executed and self-reported by the agent**, not by a script.
+8. **Edge Functions have no scaffold, no template, and no gate coverage** — yet the architecture
+   makes them the mandatory home for every third-party secret.
+9. **No session time-box and no global sign-out** — a lost phone's session renews indefinitely.
+10. **No token accounting.** Run metrics exist (`scripts/run-metrics.mjs`: duration, edit counts,
+    gate attempts) but feed nothing and gate nothing.
+11. **Proactive/scheduled loops are absent** — a deliberate choice, since I have no recurring stream
+    of work. Tell me if that is wrong.
 
 ## What I want from you
 
-Assess it as an **agentic system** — the architecture, the control flow, the verification strategy,
-the failure modes — not as a code-style review.
+Assess it as an **agentic system** — architecture, control flow, verification strategy, failure
+modes — not as a code-style review.
 
-**1. Security. Treat this as a required section, and be specific.**
-- Is Row-Level Security as the sole authorization layer sound for this architecture, given the
-  client ships a public key? Where does that model break?
-- Is the two-layer isolation check (static policy analysis + runtime impersonation probe) actually
-  sufficient to prove cross-user isolation? What does it miss?
-- Attack the secrets story: the key form, the source and bundle scanners, the public/secret routing.
-  How would a secret still reach a shipped app?
-- The anti-tamper guards protect against an agent weakening its own gate. Are they meaningful, or
-  security theatre? What is the realistic bypass?
-- Assess the **delivery** security posture: sideloading via a free Apple ID and a third-party
-  signing tool, and a PWA on a public URL.
-- Given these are personal apps with 1–50 users, tell me plainly which controls are **theatre at
-  this scale** and should be dropped. I would rather have five checks I trust than twenty I ignore.
+**1. Security. Required section, and be specific.**
+- Is RLS-as-sole-authorization sound given the client ships a public key? Where does it break?
+- Is the two-layer isolation check (static policy analysis + runtime impersonation) sufficient to
+  prove cross-user isolation? What does it miss?
+- Attack the secrets story: the key form (including `--lan`), both scanners, the routing that means
+  secret values are never captured locally at all. How would a secret still reach a shipped app?
+- The anti-tamper guards exist to stop an agent weakening its own gate — but they protect 4 paths
+  and not the other check implementations, and the signed marker only gates Supabase writes.
+  Meaningful, or theatre? What is the realistic bypass?
+- Assess the **delivery** posture: sideloading via a free Apple ID and a third-party signing tool,
+  and a PWA on a public URL.
+- Given 1–50 users per app, name which controls are **theatre at this scale** and should be dropped.
+  I would rather have five checks I trust than twenty I ignore.
 
 **2. The verification strategy.** Is "a deterministic script is the only definition of done" the
-right core idea, or does it create a false sense of safety by measuring what is easy to measure?
-What is the highest-value check that does not exist yet?
+right core idea, or does it create false confidence by measuring what is easy to measure? What is
+the single highest-value check that still does not exist? And: **is it a problem that the gate has
+no test of its own?**
 
-**3. The specialist architecture.** Is design-by-specialist / implement-by-one-executor the right
-split? Does it actually raise engineering quality, or just add cost and latency? How would you
-verify a specialist is contributing anything?
+**3. The specialist architecture.** Is design-by-specialist / implement-by-one-executor right? Does
+it raise engineering quality, or add cost and latency? **How would you mechanically verify that a
+specialist contributed anything at all?** Nothing does today.
 
-**4. The architectural bet.** No custom backend; Supabase plus RLS plus RPC plus Edge Functions.
-Where does that ceiling get hit, and what would I have to give up to go past it?
+**4. The architectural bet.** No custom backend; Supabase + RLS + RPC + Edge Functions. Where does
+that ceiling get hit, and what would I give up to go past it?
 
-**5. What would you do differently?** If your goal were exactly mine — a non-technical person
-reliably getting good apps onto an iPhone with no Apple account, on Windows — what would you keep,
-what would you delete, and what is missing entirely?
+**5. The gaps above — which order?** Rank items 1-11 by what actually threatens my outcome, and say
+which are safe to ignore indefinitely.
+
+**6. What would you do differently?** If your goal were exactly mine — a non-technical person
+reliably getting good apps onto an iPhone with no Apple account, from Windows — what would you keep,
+delete, and add?
 
 ## How to answer
 
 - **Read the repository before asserting anything about it.** If you cannot access it, say so
-  explicitly and mark every claim as based only on my description.
+  explicitly and mark every claim as based only on this description.
 - Cite specific files and lines when you criticise something.
-- Rank findings by real risk **for personal apps with a handful of users**. Do not import
-  enterprise assumptions. Calling for SOC2 or a SIEM here would tell me you did not read the brief.
-- Separate "this is broken" from "this is a design trade-off I would make differently", and be
-  explicit about which you are asserting.
-- Where you are uncertain or lack evidence, say so rather than filling the gap confidently.
-- Give me a blunt overall verdict with a score out of 100, and say what the same score would be for
-  a best-in-class alternative, so I can calibrate.
-- Finish with the **three things I should do next, in order.**
+- Rank by real risk **for personal apps with a handful of users**. Do not import enterprise
+  assumptions — recommending SOC2 or a SIEM here would tell me you did not read the brief.
+- Separate "this is broken" from "this is a trade-off I would make differently", and be explicit
+  about which you are asserting.
+- Where you lack evidence, say so instead of filling the gap confidently.
+- Give a blunt overall verdict with a score out of 100, plus what a best-in-class alternative would
+  score on the same scale, so I can calibrate.
+- Finish with **the three things I should do next, in order.**

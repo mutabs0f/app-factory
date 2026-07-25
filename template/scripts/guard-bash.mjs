@@ -36,11 +36,22 @@ try {
   process.exit(0); // no/invalid payload → allow
 }
 
+// Every file the gate's verdict actually depends on. This list used to hold only verify.mjs
+// and the two guards — but verify.mjs mostly ORCHESTRATES: the real logic of 8 of the 21
+// checks lives in the scripts it shells out to. An agent could rewrite arch-check.mjs to
+// `process.exit(0)`, or neuter the RLS queries in lib/dbclient.mjs, and verify.mjs would
+// dutifully report green. Weakening a check is the cardinal sin here, so the tripwire has to
+// cover the checks, not just the harness that calls them.
 const GATE_FILES = [
   'scripts/verify.mjs',
   'scripts/guard-bash.mjs',
   'scripts/guard-run.mjs',
   '.claude/settings.json',
+  'scripts/arch-check.mjs', // architecture: boundaries + cycles
+  'scripts/runtime-check.mjs', // proves the app actually renders
+  'scripts/secret-scan.mjs', // source + shipped-bundle secret scanning
+  'scripts/collect-keys.mjs', // env-complete, and the secret-refusal rails
+  'scripts/lib/dbclient.mjs', // EVERY database check flows through this
 ];
 const SECRET_FILE = join(homedir(), '.app-factory-gate-secret');
 
@@ -144,7 +155,9 @@ if (/^(Edit|Write|MultiEdit)$/.test(toolName)) {
   if (GATE_FILES.some((g) => fp.endsWith(g)))
     block(
       `Blocked: edit to a gate file (${fp}).\n` +
-        `verify.mjs / guard-bash.mjs / settings.json protect the deterministic gate and must\n` +
+        `These files ARE the deterministic gate (the harness, the guards, and the checks they call)
+` +
+        `and must\n` +
         `NOT be weakened without Basim's explicit approval. If this change is genuinely needed,\n` +
         `surface it to Basim and let him authorize or make it.`,
     );

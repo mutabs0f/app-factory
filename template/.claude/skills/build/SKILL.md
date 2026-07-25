@@ -14,7 +14,7 @@ Wire the app's screens to Supabase (per-feature `api.ts` + `hooks.ts`, generated
 ## Run the loop
 Start a goal loop whose ONLY exit condition is the gate:
 
-    /goal node scripts/verify.mjs exits 0 (typecheck, lint, jest, expo export, db reset + RLS/GRANT/definer coverage, secret scan, types-freshness all green), or stop after 8 turns
+    /goal node scripts/verify.mjs exits 0 (all 21 checks green — typecheck, lint, jest, architecture, bundle builds, the app actually runs, both secret scans, dependency audit, decisions resolved, env complete, migration replay, RLS coverage + isolation, definer exposure, table GRANTs, anon reachability, storage privacy, types freshness), or stop after 8 turns
 
 The evaluator (a fast model) checks the condition after every turn. You run `node scripts/verify.mjs` yourself each turn to iterate — ITS output is your retry feedback, and ITS exit code is the verdict. **Your claim of "done" is a hint, never the verdict.** (Requires Claude Code with `/goal`; if unavailable, re-run `/build` manually against the verify output until green.)
 
