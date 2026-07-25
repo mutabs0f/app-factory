@@ -60,9 +60,17 @@ check('keys marker NOT copied', !has('config/.keys-provisioned'));
 // 4. the system travels with the app
 for (const s of ['new-app', 'design-import', 'preview', 'build', 'verify-app', 'review', 'ship', 'app', 'undo', 'discuss', 'research-apis'])
   check(`skill ${s}`, has(`.claude/skills/${s}/SKILL.md`));
-for (const a of ['advisor', 'code-reviewer', 'db-guard'])
+for (const a of ['advisor', 'code-reviewer', 'db-guard', 'api-designer', 'backend-engineer', 'frontend-engineer'])
   check(`subagent ${a}`, has(`.claude/agents/${a}.md`));
 check('advisor pinned to Fable 5', has('.claude/agents/advisor.md') && read('.claude/agents/advisor.md').includes('model: claude-fable-5'));
+// The three domain designers must be on a frontier model — their whole value is judgement
+// (schema shape, operation placement, screen architecture), which is exactly what degrades
+// on a cheaper tier. Assert the current set, not one hardcoded id (see the note below).
+for (const a of ['api-designer', 'backend-engineer', 'frontend-engineer'])
+  check(
+    `${a} on a frontier model`,
+    has(`.claude/agents/${a}.md`) && /^model:\s*claude-(opus|sonnet)-5\s*$/m.test(read(`.claude/agents/${a}.md`)),
+  );
 try {
   const settings = JSON.parse(read('.claude/settings.json'));
   // Assert a CURRENT frontier model, not one exact string — pinning the assertion to a

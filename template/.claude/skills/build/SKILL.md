@@ -25,6 +25,22 @@ The evaluator (a fast model) checks the condition after every turn. You run `nod
 4. **Encode every multi-attempt fix**: whenever the loop needs more than one attempt to go green, append ONE line to `LESSONS.md` — failure signature → winning fix. Mechanical, not optional.
 5. **Do NOT weaken the gate to make it pass.** `verify.mjs` / `guard-bash.mjs` / `.claude/settings.json` are protected; a PreToolUse hook blocks edits to them. Fix the code, never the check.
 
+## Consult the specialists BEFORE you write, not after review rejects it
+
+Three domain specialists (all Opus 5) design; **you implement**. This split is deliberate:
+malaki failed because isolated agents each wrote their own half and the contracts drifted.
+One executor writing against specialist designs keeps the app coherent.
+
+| Call | When |
+|---|---|
+| **`api-designer`** | Any NEW operation, or a third-party call. It decides where the operation lives — direct table access vs Postgres RPC vs Edge Function — and returns the contract, including what failure looks like. |
+| **`backend-engineer`** | Any schema change, RPC, or Edge Function. It owns constraints, indexes, RLS correctness and query cost — the things that are expensive to change once data exists. |
+| **`frontend-engineer`** | Any new screen or feature. It owns screen architecture, the four states every screen owes the user (loading/empty/error/content), Arabic/RTL, accessibility labels and perceived speed. |
+
+Call one **before** building the thing, with the SPEC section and the relevant files —
+not after the fact. A design consult is cheap; rebuilding a feature is not. Do not call
+all three out of habit: a screen that reads one existing table needs none of them.
+
 ## Escalate up, don't spin (the executor/advisor pattern)
 You are the executor; the `advisor` subagent (Fable 5) is the thinker you call when stuck:
 - **Trigger:** the SAME check fails twice with the same signature, or a bug survives two

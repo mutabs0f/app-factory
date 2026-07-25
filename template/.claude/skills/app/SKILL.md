@@ -45,6 +45,18 @@ foreground and wait for it, as `/new-app` says.
 **`/discuss` and `/research-apis` run FIRST and are not optional.** Skipping to `/new-app` is what
 produced an app whose only data source turned out to be unobtainable, after the schema was written.
 
+## The specialists
+
+Three Opus 5 domain designers back the building stages — `api-designer` (where each operation
+lives and what its contract is), `backend-engineer` (schema, constraints, indexes, RLS
+correctness, query cost) and `frontend-engineer` (screen architecture, the four states every
+screen owes the user, Arabic/RTL, accessibility, perceived speed). `/new-app` consults the first
+two before any SQL is written; `/build` consults whichever the change touches.
+
+**They design; the executor implements.** Do not have specialists write competing halves of the
+app — that is precisely how malaki ended up with two payment implementations and a client and
+server that disagreed about auth. One writer, expert designs, deterministic gate.
+
 Between stages: **commit**. A stage that produced artifacts and did not commit them has not
 finished (provider-scout's entire S1 sat uncommitted for 10 days — don't repeat that).
 

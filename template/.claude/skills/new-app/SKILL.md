@@ -39,6 +39,24 @@ If it doesn't fit on a page, it's too big for v1 — cut. Fill the skeleton:
 - **Screens** — the explicit SCREEN LIST (this is what DESIGN and BUILD consume).
 - **Non-goals** — what v1 explicitly will NOT do. Be concrete; this is where scope creep dies.
 
+## 2b. Design the operations and the data model BEFORE writing SQL
+
+The schema is the most expensive thing in the app to change once it holds data. Spend the
+consult here, not after the first migration is applied:
+
+1. **`api-designer`** — give it the SPEC's screen list and features. It returns the operation
+   contract: for each thing the app does, where it lives (direct table access under RLS vs a
+   Postgres RPC for anything atomic vs an Edge Function for secrets/server-authoritative
+   logic), the inputs and returns, who may call it, and what failure looks like. This is the
+   stage where "we'll figure out the API later" becomes contract drift.
+2. **`backend-engineer`** — give it that contract. It returns the schema design: tables,
+   columns, types, constraints, indexes, and the policies, with a reason for every non-obvious
+   choice and a flag on anything expensive to change later.
+
+Then write the migrations to that design. If the two disagree, resolve it now, in
+`docs/DECISIONS.md` — an unresolved disagreement between the operation surface and the schema
+is exactly the malaki failure (three sources of truth that never got reconciled).
+
 ## 3. Write the schema migration(s) — single source of truth
 Scaffold, don't hand-write: `node scripts/new-migration.mjs <name>` per table/concern. Edit each scaffold — it already includes RLS + per-op policies + policy-column indexes + **matching GRANTs** (policies alone don't grant access under Supabase's always-revoked default). The migration is the ONLY source of truth for the schema. After applying:
 - Regenerate `src/types/database.types.ts` from the live schema.
