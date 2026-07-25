@@ -4,6 +4,8 @@
 // Never fabricates a pass. The Supabase MCP connection and Expo Go on the
 // iPhone are confirmed separately (human/assistant), not by this script.
 import { execSync } from 'node:child_process';
+import { existsSync, readdirSync } from 'node:fs';
+import { join } from 'node:path';
 
 const results = [];
 const add = (name, ok, detail) => results.push({ name, ok, detail });
@@ -95,6 +97,19 @@ cmdCheck('gh authenticated', 'gh auth status 2>&1'); // exit 0 only when logged 
 // reports a version even when supabase-go is missing (a vacuous green we hit once).
 cmdCheck('supabase cli', 'supabase-go --version');
 cmdCheck('claude >= 2.1.154', 'claude --version', { min: [2, 1, 154] });
+// The gate now OPENS the app (scripts/runtime-check.mjs), which needs a headless browser.
+// Checked here so a missing browser is a named preflight item with a one-line fix, rather
+// than a mysterious red inside the gate.
+{
+  const home = process.env.LOCALAPPDATA || process.env.HOME || '';
+  const cache = home ? join(home, 'ms-playwright') : '';
+  const present = cache && existsSync(cache) && readdirSync(cache).some((d) => /chromium/i.test(d));
+  add(
+    'headless browser (runtime check)',
+    !!present,
+    present ? 'chromium present' : 'missing — run: npx playwright install chromium',
+  );
+}
 
 // Report
 let allOk = true;

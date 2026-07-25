@@ -17,7 +17,16 @@ Turn a green tree into a running app on Basim's phone. `/ship --dry-run` prints 
 
 ## Native path (default)
 1. Tag the release commit: `git tag v<n>` and push it — or fire `.github/workflows/ios-build.yml` via `gh workflow run ios-build.yml` (workflow_dispatch). The push of a `v*` tag triggers the same build.
-2. Watch the run to completion: `gh run watch` (or a `/loop 15m` CI watcher for long builds). Do NOT walk away claiming success.
+2. **Watch the run to completion — this is a time-based loop, use one.** The build takes
+   25-40 minutes, which is longer than a single turn should block on. Start:
+
+       /loop 10m check the ios-build run for <slug>: if it is still running, say so and stop; if it succeeded, report the artifact URL; if it failed, read the failing step's log and fix the cause
+
+   The loop re-runs on the interval and ends when the run finishes (the article's exact
+   time-based case: "a PR which may receive code reviews or fail CI"). Prefer this to
+   blocking on `gh run watch` — and if `/loop` is unavailable, poll with
+   `gh run view <id> --json status,conclusion` and say plainly that you are polling.
+   **Never walk away claiming success**: report only what `gh run view` actually returned.
 3. **Confirm before reporting.** `gh run view <id>` must show conclusion `success`; `gh run view <id> --log` / the run's artifacts must list the built IPA. **Never report "shipped" without the green run URL AND the artifact — check, never assume.** A red/missing run HALTS.
 4. Report to Basim: the **green run URL** + the **artifact (unsigned IPA) download link**, then his ~3-minute manual part:
    - Download the unsigned IPA from the run artifacts.

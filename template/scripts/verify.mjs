@@ -214,9 +214,33 @@ async function waitForSchema(client, expectTables) {
 // bundle secret-scan below would scan the wrong file. Correctness beats the extra seconds;
 // the fast inner loop skips the export entirely rather than trusting a cache.
 for (const platform of deliveryTargets()) {
-  const r = tryRun(`npx expo export --platform ${platform} --clear`);
+  let r = tryRun(`npx expo export --platform ${platform} --clear`);
+  // On Windows, dist/ is routinely held open by a preview server, an editor, or the
+  // antivirus scanning the freshly-written bundle, and --clear then dies on EBUSY. That is
+  // an environment problem, not a code defect — retry once, and if it persists say so in
+  // words Basim can act on instead of dumping a Metro stack trace. A gate that reports a
+  // file lock as a build failure is a gate that gets ignored.
+  if (!r.ok && /EBUSY|resource busy or locked|being used by another process/i.test(r.out)) {
+    await new Promise((s) => setTimeout(s, 3000));
+    r = tryRun(`npx expo export --platform ${platform} --clear`);
+    if (!r.ok && /EBUSY|resource busy or locked|being used by another process/i.test(r.out)) {
+      record(
+        `${platform === 'ios' ? 'iOS' : 'web'} bundle (expo export)`,
+        false,
+        'dist/ is locked by another program, so the bundle could not be rebuilt.\n' +
+          '         Close any preview/dev server or editor tab using this folder and re-run.\n' +
+          '         (This is a file lock, not a problem with your code.)',
+      );
+      continue;
+    }
+  }
   record(`${platform === 'ios' ? 'iOS' : 'web'} bundle (expo export)`, r.ok, r.ok ? '' : tail(r.out));
 }
+// 4b — RUNS THE APP AND LOOKS AT IT. Every other check proves the code compiles and the
+// database is sound; only this one proves the thing actually renders. Measured: a build
+// passed all 19 other checks while showing a blank white page. A missing browser is a
+// FAILURE with a one-line fix, never a skip — see runtime-check.mjs.
+{ const r = tryRun('node scripts/runtime-check.mjs'); record('app runs (every route renders)', r.ok, r.ok ? tail(r.out, 2) : tail(r.out, 14)); }
 // 5 — no secrets anywhere (before DB checks, so it can never be skipped by an earlier failure)
 { const r = tryRun('node scripts/secret-scan.mjs'); record('secret scan (source)', r.ok, r.ok ? '' : tail(r.out)); }
 // 5b — and no secrets in the BUILT bundle. Source being clean does not prove the shipped
