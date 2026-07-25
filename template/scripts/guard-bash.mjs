@@ -181,8 +181,13 @@ if (toolName === 'Bash' || toolInput.command) {
   // qualified as .claude/settings.json (so a legit .expo/.vscode/settings.json write isn't
   // blocked). String-matching still can't stop a determined obfuscated write — the conceded
   // defense-in-depth limit; gateFilesIntact() is the structural backstop for a stubbed gate.
+  // Must match GATE_FILES. Widening the Edit/Write tripwire without widening this left the
+  // obvious hole open: an agent blocked from editing arch-check.mjs could still overwrite it
+  // from the shell. Distinctive script names match anywhere; settings.json only when
+  // path-qualified, so a legitimate .expo/.vscode/settings.json write is not blocked.
   const gateName =
-    '(?:verify\\.mjs|guard-bash\\.mjs|guard-run\\.mjs|\\.claude[\\\\/]settings\\.json|\\.verify-pass)';
+    '(?:verify\\.mjs|guard-bash\\.mjs|guard-run\\.mjs|arch-check\\.mjs|runtime-check\\.mjs' +
+    '|secret-scan\\.mjs|collect-keys\\.mjs|dbclient\\.mjs|\\.claude[\\\\/]settings\\.json|\\.verify-pass)';
   const redirWrite = new RegExp(
     `(?:>>?|\\btee\\b|Set-Content|Out-File|Add-Content|\\bsc\\b|\\bac\\b|sed\\s+-i)[^;&|]*${gateName}`,
     'i',

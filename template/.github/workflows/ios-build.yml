@@ -64,6 +64,7 @@ jobs:
           npx tsc --noEmit
           npx eslint .
           npx jest --ci --forceExit
+          node scripts/scripts.test.mjs
           node scripts/arch-check.mjs
           node scripts/secret-scan.mjs
 

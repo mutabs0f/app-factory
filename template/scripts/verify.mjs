@@ -3,9 +3,16 @@
 // Runs all checks, reports each independently, and exits 0 ONLY when every one
 // is green. A claim of "done" is a hint; THIS script's exit code is the verdict.
 //
-// Checks: 1 typecheck · 2 lint · 3 tests · 4 iOS bundle · 5 secret scan ·
-//         6 decisions resolved · 7 env complete · 8 db reset + RLS + definer + grants ·
-//         9 generated-types freshness
+// 21 checks (22 when DECISIONS resolves Delivery to PWA — the web bundle is checked too).
+// Code:     typecheck · lint · jest · architecture (boundaries + cycles) · delivery bundle(s)
+//           build · the app actually RUNS in a browser · secret scan of source · secret scan
+//           of the shipped bundle · dependency audit (CRITICAL only, see note below) ·
+//           DECISIONS has no unresolved "X or Y" · required API keys present.
+// Database: migration replay from zero · RLS coverage · SECURITY DEFINER exposure · table
+//           GRANTs vs policy ops · anon-role reachability · no user-editable claims in
+//           policies · storage buckets private · RLS cross-user isolation (static + runtime
+//           impersonation probe) · generated-types drift.
+// Keep this list in sync with CLAUDE.md and build/SKILL.md — it has drifted before.
 //
 // The DB checks run in one of TWO modes (scripts/lib/dbclient.mjs):
 //   local — the Docker stack (`supabase start`), replayed with `supabase db reset`
@@ -199,6 +206,10 @@ async function waitForSchema(client, expectTables) {
 { const r = tryRun('npx eslint .'); record('lint (eslint)', r.ok, r.ok ? '' : tail(r.out)); }
 // 3 — tests
 { const r = tryRun('npx jest --ci --forceExit'); record('tests (jest)', r.ok, r.ok ? '' : tail(r.out)); }
+// 3a — the GATE'S OWN tests. ~2,600 lines of control scripts decide whether every app may
+// ship, and they had no test at all: three missing-import bugs shipped in one day. This runs
+// first among the cheap checks, because a broken oracle makes every result below meaningless.
+{ const r = tryRun('node scripts/scripts.test.mjs'); record('gate self-test', r.ok, r.ok ? tail(r.out, 1) : tail(r.out, 12)); }
 // 3b — architecture. CLAUDE.md calls its structural rules "mechanical"; until this check
 // existed they were prose, and eslint ignores scripts/ entirely — so an agent could
 // violate every one of them and still get a green gate. Enforces the supabase boundary,

@@ -15,7 +15,7 @@
 //     an app shipped pointing at a LAN address, unusable anywhere else).
 //   • A missing Vercel login is a HALT with the exact command to run, never a silent skip.
 import { execSync, spawnSync } from 'node:child_process';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 const ROOT = process.cwd();

@@ -15,11 +15,16 @@
 //   node scripts/runtime-check.mjs --keep     leave the server up for manual poking
 //   node scripts/runtime-check.mjs --aria     also print the accessibility tree per route
 //
-// WHAT IT PROVES: every route mounts real content; zero console errors; zero failed network
-// requests; protected routes redirect instead of crashing.
-// WHAT IT DOES NOT PROVE: signed-in behaviour. Walking authenticated screens needs a seeded
-// session, which is not built yet — that limit is printed on every run rather than implied away.
-import { execSync, spawn } from 'node:child_process';
+// WHAT IT PROVES: every route mounts real content (>50 chars in #root); zero console errors;
+// zero failed requests and no 5xx.
+// WHAT IT DOES NOT PROVE, and do not let anyone imply otherwise:
+//   · signed-in behaviour — no session is seeded, so protected routes are only seen as their
+//     redirect target. Every protected route landing on the same login page PASSES.
+//   · WHERE a protected route redirects to — the final URL is not asserted.
+//   · 4xx responses — only failed requests and 5xx currently fail the check.
+//   · the iOS bundle — this walks the WEB build. The primary deliverable is never launched.
+// These limits are printed on every run rather than being implied away.
+import { execSync } from 'node:child_process';
 import { createServer } from 'node:http';
 import { existsSync, readFileSync, readdirSync, rmSync, statSync } from 'node:fs';
 import { extname, join } from 'node:path';
@@ -148,8 +153,28 @@ for (const r of results) {
   if (SHOW_ARIA && r.aria) console.log(`      ${r.aria}`);
 }
 
-console.log(`\n  ${results.length} route(s) walked. NOT covered: signed-in screens (needs a seeded session).`);
-if (KEEP) console.log(`  server still up at ${base} — ctrl-c to stop.\n`);
-if (bad) { console.error(`  runtime-check: ${bad} route(s) broken.\n`); process.exit(1); }
-console.log('  runtime-check: every route renders, no console errors, no failed requests.\n');
+console.log(`\n  ${results.length} route(s) walked.`);
+console.log('  NOT covered: signed-in screens (no session is seeded), where a protected route');
+console.log('  redirects TO, and the iOS bundle — this walks the WEB build only.');
+
+if (bad) {
+  console.error(`\n  runtime-check: ${bad} route(s) broken.\n`);
+  if (!KEEP) process.exit(1);
+} else {
+  console.log('  runtime-check: every route renders, no console errors, no failed requests.\n');
+}
+
+// --keep must actually KEEP the server. It previously printed "server still up" and then
+// exited unconditionally, killing it — so the interactive pass documented in verify-app
+// could never work. Now the process stays alive until ctrl-c.
+if (KEEP) {
+  console.log(`  server still up at ${base} — open it, poke the screen you changed, ctrl-c when done.`);
+  process.on('SIGINT', () => {
+    server.close();
+    rmSync(OUT, { recursive: true, force: true });
+    console.log('\n  stopped; build output cleaned up.');
+    process.exit(bad ? 1 : 0);
+  });
+  await new Promise(() => {}); // hold the process open
+}
 process.exit(0);

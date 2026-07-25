@@ -14,17 +14,25 @@
 // looks like production. Never widen this.
 import { execSync } from 'node:child_process';
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
+import { homedir } from 'node:os';
 import { join } from 'node:path';
 
 const API = 'https://api.supabase.com/v1';
 
+// One line per entry, '#' comments ignored. Used for both .dev-branch (in-repo, gates MCP
+// writes) and ~/.app-factory-resettable-refs (out-of-repo, gates destructive schema drops).
+export function readRefList(file) {
+  if (!existsSync(file)) return new Set();
+  return new Set(
+    readFileSync(file, 'utf8')
+      .split(/\r?\n/)
+      .map((l) => l.trim())
+      .filter((l) => l && !l.startsWith('#')),
+  );
+}
+
 export function devRefs(root) {
-  const f = join(root, '.dev-branch');
-  if (!existsSync(f)) return [];
-  return readFileSync(f, 'utf8')
-    .split(/\r?\n/)
-    .map((l) => l.trim())
-    .filter((l) => l && !l.startsWith('#'));
+  return [...readRefList(join(root, '.dev-branch'))];
 }
 
 export function hasDocker() {
@@ -147,6 +155,29 @@ export async function resetDb(mode, { root, dbUrl, run }) {
   if (!ref) return { ok: false, out: 'cloud reset refused: .dev-branch lists no dev project ref' };
   if (!token) return { ok: false, out: 'cloud reset refused: $SUPABASE_ACCESS_TOKEN is not set' };
 
+  // ── THE DESTRUCTIVE-AUTHORIZATION GATE ────────────────────────────────────────────────
+  // This function DROPS THE PUBLIC SCHEMA. The previous guards were: first ref in
+  // .dev-branch, ACTIVE_HEALTHY, and a name not containing "prod". That is not enough —
+  // .dev-branch lives INSIDE the repo and is therefore agent-writable, and a real
+  // production project named "My App" passes every one of those checks and gets erased.
+  //
+  // Destructive authorization now lives OUTSIDE the repository, in a file only the human
+  // creates, alongside the gate secret. Nothing an agent can write, clone, or open a PR
+  // against can authorize a schema drop.
+  const RESETTABLE = join(homedir(), '.app-factory-resettable-refs');
+  if (!readRefList(RESETTABLE).has(ref))
+    return {
+      ok: false,
+      out:
+        `cloud reset REFUSED: ${ref} is not authorized for destructive reset.\n` +
+        `  Dropping a schema needs authorization from OUTSIDE this repo, because .dev-branch\n` +
+        `  is agent-writable and a production project can be named anything.\n\n` +
+        `  If ${ref} is genuinely a throwaway DEV project, add its ref to:\n` +
+        `    ${RESETTABLE}\n` +
+        `  one ref per line. Never add a project holding data you care about.\n\n` +
+        `  Otherwise run the gate against local Docker instead:  node scripts/verify.mjs --db=local`,
+    };
+
   // Fail-closed guards. This drops a schema; be paranoid, loudly.
   const proj = await projectStatus(ref, token);
   if (!proj) return { ok: false, out: `cloud reset refused: cannot read project ${ref} (bad token or ref?)` };
@@ -156,11 +187,28 @@ export async function resetDb(mode, { root, dbUrl, run }) {
       out: `cloud reset refused: project ${ref} is ${proj.status}, not ACTIVE_HEALTHY.\n` +
         `A paused project answers queries emptily — that would be a vacuous green. Restore it first.`,
     };
-  if (/prod/i.test(proj.name || ''))
+  if (/prod|live/i.test(proj.name || ''))
     return { ok: false, out: `cloud reset REFUSED: project name "${proj.name}" looks like production.` };
 
+  // Say out loud what is about to be destroyed. A surprised human is a bug report; a silent
+  // drop is a disaster. Also note honestly that this is NOT a true from-zero replay: only
+  // `public` is dropped — auth.users, storage objects and other schemas survive, so a cloud
+  // green is weaker evidence than a local `supabase db reset`.
   const migs = migrationFiles(root);
   const log = [`cloud replay on ${proj.name} (${ref}) — ${migs.length} migration(s)`];
+  try {
+    const rows = await apiQuery(
+      ref,
+      token,
+      `select (select count(*) from pg_class c join pg_namespace n on n.oid = c.relnamespace
+                where n.nspname='public' and c.relkind='r')::int as tables,
+              (select count(*) from auth.users)::int as users;`,
+    );
+    const { tables = 0, users = 0 } = rows[0] || {};
+    log.push(`  DROPPING public schema: ${tables} table(s). Project has ${users} auth user(s) (these survive).`);
+  } catch {
+    log.push('  (could not inventory before dropping; proceeding on the out-of-repo authorization)');
+  }
   try {
     await apiQuery(ref, token, FRESH_PUBLIC);
     log.push('  public schema dropped + recreated');
