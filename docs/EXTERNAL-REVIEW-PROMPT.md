@@ -9,10 +9,79 @@ or missing.
 
 **The entire system is public. Read it before judging it:**
 https://github.com/mutabs0f/app-factory
-The factory is `template/` (the app blueprint every project is cloned from), `scripts/` (the
-factory's own tooling), and `scaffolder/`. The deterministic gate is
-`template/scripts/verify.mjs`. The agent behaviours are markdown in `template/.claude/skills/`
-and `template/.claude/agents/`.
+(On my machine it lives at `C:\Users\Thinkpad\Agents\app-factory\`. Every app I build is a full
+clone of `template/` into a sibling directory, e.g. `C:\Users\Thinkpad\Agents\<app-slug>\`, so the
+whole agentic system travels with each app rather than living in one shared place.)
+
+## Directory map
+
+```
+app-factory/
+├── scaffolder/
+│   ├── SKILL.md                    the /new-app-project entry point I type
+│   └── scaffold.mjs                deterministic clone+rename+git-init (no LLM in the loop)
+├── scripts/                        the FACTORY's own tooling (not shipped into apps)
+│   ├── doctor.mjs                  environment preflight; reports which DB mode the gate would use
+│   ├── factory-eval.mjs            golden probe: scaffolds a throwaway app and asserts the
+│   │                               machinery is intact (currently 47 assertions)
+│   └── run-metrics.mjs
+├── office/                         a 3D "watch the agents work" viewer — cosmetic, ignore it
+└── template/                       ← THE PRODUCT. Every app is a clone of this.
+    ├── CLAUDE.md                   the operating rules every stage reads first
+    ├── AGENTS.md · LESSONS.md      conventions; accumulated failure→fix lessons
+    ├── .claude/
+    │   ├── settings.json           hooks (PostToolUse secret scan, PreToolUse gate guard) + model pin
+    │   ├── skills/                 THE STAGES (each a markdown behaviour spec)
+    │   │   ├── discuss/            talk the idea through — propose, don't interrogate
+    │   │   ├── research-apis/      find services AND verify I can obtain them
+    │   │   ├── new-app/            spec + schema + decisions + the key form
+    │   │   ├── design-import/      import a design I made elsewhere, faithfully
+    │   │   ├── preview/            get it onto my phone / a link
+    │   │   ├── build/              the loop whose only exit is a green gate
+    │   │   ├── verify-app/         the manual on-device pass
+    │   │   ├── review/             fresh-context review + security gate
+    │   │   ├── ship/               IPA via CI, or deploy the PWA
+    │   │   ├── app/                runs the whole sequence; stops at 4 human gates
+    │   │   └── undo/               restore a working version, non-destructively
+    │   └── agents/                 THE SPECIALISTS (subagents, fresh context)
+    │       ├── api-designer.md       where each operation lives + its contract
+    │       ├── backend-engineer.md   schema, constraints, indexes, RLS correctness, query cost
+    │       ├── frontend-engineer.md  screen architecture, the 4 states, RTL, a11y, perceived speed
+    │       ├── code-reviewer.md      reviews the diff; did NOT write the code; read-only
+    │       ├── db-guard.md           reviews each migration against the canonical RLS+GRANT pattern
+    │       └── advisor.md            consulted only when stuck (different model, on purpose)
+    ├── scripts/                    THE DETERMINISTIC HALF — shipped into every app
+    │   ├── verify.mjs              ★ THE GATE. 19 checks. Exit 0 is the only definition of done.
+    │   ├── lib/dbclient.mjs        one SQL interface, two backends (local Docker | cloud Mgmt API)
+    │   ├── secret-scan.mjs         scans source AND (--bundle) the shipped artifact
+    │   ├── collect-keys.mjs        the 127.0.0.1 one-time-token key form; refuses secrets into app files
+    │   ├── guard-bash.mjs          PreToolUse guard: blocks gate edits + non-dev DB writes
+    │   ├── guard-run.mjs           fail-closed launcher for the guard
+    │   ├── new-migration.mjs       scaffolds a migration pre-filled with the RLS+GRANT pattern
+    │   ├── deploy-web.mjs          export → deploy → GET the URL and require 2xx before reporting
+    │   ├── design-brief.mjs        generates the design prompt I paste elsewhere
+    │   └── design-import.mjs       validates + reconciles the returned design against the spec
+    ├── supabase/
+    │   ├── migrations/             the ONLY source of schema truth
+    │   ├── seed.sql · config.toml
+    ├── src/
+    │   ├── app/                    routes ONLY — each a thin re-export of a feature screen
+    │   │   ├── (auth)/sign-in · verify-otp
+    │   │   └── (app)/index · settings
+    │   ├── features/               auth · profile · home  (each: api.ts, hooks.ts, screens, tests)
+    │   ├── lib/                    supabase.ts · auth.tsx · storage.ts (encrypted session store)
+    │   └── types/database.types.ts generated FROM the schema; drift fails the gate
+    ├── config/integrations.json    approved services — names/formats only, NEVER values
+    ├── docs/                       SPEC · DECISIONS · REVIEW-LOG · OBTAINABLE-SERVICES
+    ├── .github/workflows/ios-build.yml   unsigned-IPA build on a macOS runner
+    ├── .dev-branch                 allowlist of DB refs the agent may write to (fail-closed)
+    └── .env                        gitignored, never committed; written only by the key form
+```
+
+The files most worth your time, in order: `template/scripts/verify.mjs` (the gate — the whole
+doctrine lives here), `template/CLAUDE.md` (the rules), `template/.claude/skills/build/SKILL.md`
+(the loop), `template/.claude/agents/*.md` (the specialists), and
+`template/scripts/guard-bash.mjs` (the anti-tamper story).
 
 ## Who I am and what I am trying to do
 
